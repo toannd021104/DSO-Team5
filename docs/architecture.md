@@ -2,7 +2,7 @@
 
 ## Trạng thái triển khai
 
-Terraform hiện có tạo VPC/EKS, cấu hình GuardDuty, một EventBridge rule cho attack-sequence finding và Lambda observe-only ghi summary. Lambda chưa có quyền vào Kubernetes API và không chạy remediation.
+Stack hiện deploy ở `us-east-1`: VPC/EKS, GuardDuty EKS Protection/Runtime Monitoring, EventBridge rule và Lambda observe-only ghi summary. Sample AttackSequence finding đã được xử lý thành công. Lambda chưa có quyền vào Kubernetes API và không chạy remediation.
 
 ## Luồng mục tiêu
 
@@ -56,7 +56,7 @@ Amazon VPC CNI phải được cấu hình hỗ trợ network policy trước kh
 
 ## Phân kỳ xây dựng
 
-1. Detection + EventBridge observe-only (Terraform hiện tại).
+1. Detection + EventBridge observe-only (đã deploy và xác nhận bằng sample finding).
 2. Orchestration, event archive, idempotency, enrichment và policy replay.
 3. Sandbox NetworkPolicy quarantine với verify, TTL và rollback.
 4. AI analyst read-only, đo chất lượng và evidence citation.

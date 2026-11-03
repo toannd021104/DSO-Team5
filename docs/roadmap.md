@@ -2,17 +2,19 @@
 
 ## 0. Thiết kế (đã hoàn thành)
 
-- [x] Chọn AWS region `ap-southeast-1` và profile `guru`.
+- [x] Chọn AWS region `us-east-1` và profile `guru`.
 - [x] Nghiên cứu GuardDuty, Detective, AWS incident response guidance và các repo playbook mẫu.
 - [x] Vẽ luồng detect → analyze → policy → contain → recover/verify bằng SVG.
 - [x] Dựng Terraform nền tảng EKS + GuardDuty + EventBridge → Lambda observe-only.
-- [ ] Triển khai lên account sandbox. Hiện AWS Organization SCP explicit-deny API cần để lập Terraform plan.
+- [x] Deploy VPC/EKS 1.34, hai worker, GuardDuty EKS plans và EventBridge → Lambda observe-only.
+- [x] Xác nhận coverage healthy và gửi sample AttackSequence finding qua Lambda.
+- [ ] Chạy workshop attack-sequence scenario thực tế.
 
-## 1. Detection trên sandbox
+## 1. Detection trên sandbox (infrastructure đã deploy)
 
-- Bật EKS Protection và Runtime Monitoring; xác nhận GuardDuty agent coverage healthy.
-- Chạy Container Security Workshop module 5.3.2 trong cluster riêng.
-- Lưu event mẫu đã khử thông tin nhạy cảm, kiểm tra finding và các nguồn signal.
+- [x] Bật EKS Protection và Runtime Monitoring; xác nhận GuardDuty agent coverage healthy.
+- [ ] Chạy Container Security Workshop module 5.3.2 trong cluster riêng.
+- [x] Tạo sample finding và xác nhận EventBridge gọi Lambda; [ ] lưu event fixture đã khử thông tin nhạy cảm từ workshop.
 - Ghi lại prerequisites, chi phí thực tế và bước teardown.
 
 **Tiêu chí đạt:** attack-sequence finding được tạo và nhận qua EventBridge; coverage được xác nhận; có thể xoá lab sạch.

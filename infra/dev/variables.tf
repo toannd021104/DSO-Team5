@@ -1,7 +1,7 @@
 variable "aws_region" {
   description = "AWS region for this disposable EKS and GuardDuty lab."
   type        = string
-  default     = "ap-southeast-1"
+  default     = "us-east-1"
 }
 
 variable "aws_profile" {

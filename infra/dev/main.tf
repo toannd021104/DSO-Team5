@@ -100,6 +100,16 @@ resource "aws_guardduty_detector_feature" "runtime_monitoring" {
     name   = "EKS_ADDON_MANAGEMENT"
     status = "ENABLED"
   }
+
+  additional_configuration {
+    name   = "EC2_AGENT_MANAGEMENT"
+    status = "DISABLED"
+  }
+
+  additional_configuration {
+    name   = "ECS_FARGATE_AGENT_MANAGEMENT"
+    status = "DISABLED"
+  }
 }
 
 resource "aws_cloudwatch_log_group" "incident_handler" {

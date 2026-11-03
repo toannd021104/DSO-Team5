@@ -6,9 +6,11 @@ Stack này dựng một VPC riêng, EKS với worker nodes trong private subnet,
 
 ## Trạng thái triển khai hiện tại
 
-EKS, GuardDuty, VPC, EventBridge, Lambda và log group chưa được triển khai. Một lần apply từng phần chỉ tạo role `guarduty-dev-incident-handler`; role này không có managed policy hoặc inline policy. Role đang nằm trong Terraform state local tại workspace triển khai.
+Stack đã deploy ở `us-east-1`: VPC, EKS 1.34, hai EC2 workers, GuardDuty EKS Protection/Runtime Monitoring, EventBridge rule và Lambda observe-only. GuardDuty agent được quản lý tự động; coverage hiện healthy cho cluster và hai worker. Sample finding `AttackSequence:EKS/CompromisedCluster` đã kích hoạt Lambda và được ghi vào CloudWatch Logs.
 
-AWS Organizations SCP hiện explicit-deny các API cần thiết để tiếp tục (bao gồm `ec2:DescribeAvailabilityZones`, `ec2:CreateVpc`, `eks:ListClusters`, `guardduty:ListDetectors`, `logs:CreateLogGroup` và `events:TagResource`). Vì vậy không thể triển khai các phần còn lại bằng profile hiện tại.
+Terraform state đang lưu local tại workspace triển khai; không xoá hoặc thay máy làm việc trước khi chuyển state sang backend dùng chung. Region `ap-southeast-1` bị AWS Organizations policy chặn một số API discovery/create; lab hiện chạy tại `us-east-1`.
+
+Stack **chưa** có Step Functions, Detective integration, root-cause analysis workflow hay auto-remediation. Lambda hiện chỉ validate finding và log summary.
 
 ## Điều kiện cần
 
@@ -28,7 +30,7 @@ cp terraform.tfvars.example terraform.tfvars
 
 Sửa `terraform.tfvars`:
 
-- Giữ `aws_profile = "guru"` và `aws_region = "ap-southeast-1"` nếu đó là cấu hình dự định.
+- Giữ `aws_profile = "guru"` và `aws_region = "us-east-1"` cho lab hiện tại.
 - Chọn Kubernetes version còn được AWS hỗ trợ tại region này.
 - Đổi `allowed_cidr_blocks` thành IP public hiện tại của bạn dạng `/32`, ví dụ `198.51.100.25/32` chỉ là địa chỉ minh hoạ, cần thay bằng IP thật.
 
@@ -56,7 +58,7 @@ terraform apply dev.tfplan
 ```bash
 aws eks update-kubeconfig \
   --profile guru \
-  --region ap-southeast-1 \
+  --region us-east-1 \
   --name "$(terraform output -raw eks_cluster_name)"
 ```
 
@@ -65,7 +67,7 @@ Theo dõi finding đã được Lambda nhận:
 ```bash
 aws logs tail "$(terraform output -raw incident_handler_log_group)" \
   --profile guru \
-  --region ap-southeast-1 \
+  --region us-east-1 \
   --follow
 ```
 

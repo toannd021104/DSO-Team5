@@ -1,6 +1,6 @@
 # Luồng phát hiện và ứng phó sự cố EKS
 
-Sơ đồ dưới đây là **luồng mục tiêu** của Guarduty. Terraform hiện tại mới dựng luồng đầu tiên: GuardDuty finding → EventBridge → Lambda observe-only. Các bước orchestration, enrichment, auto-containment và recovery sẽ được triển khai lần lượt.
+Sơ đồ dưới đây là **luồng mục tiêu** của Guarduty. Terraform đã deploy luồng nền tảng tại `us-east-1`: GuardDuty finding → EventBridge → Lambda observe-only. Sample AttackSequence finding đã tới CloudWatch Logs. Step Functions, Detective enrichment, root-cause workflow, auto-containment và recovery chưa được triển khai.
 
 ![Guarduty EKS incident response flow](incident-response-flow.svg)
 

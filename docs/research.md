@@ -48,7 +48,7 @@ Checked against AWS documentation on 2026-11-03. AWS service behavior and worksh
 
 ## Open decisions before enabling response
 
-- AWS region đã chọn là `ap-southeast-1`; Terraform planning hiện bị AWS Organizations SCP explicit-deny `ec2:DescribeAvailabilityZones`. GuardDuty read access cũng bị deny. Cần quyền từ Organizations admin trước khi plan/apply.
+- AWS lab hiện chạy ở `us-east-1`; discovery và deploy của stack thành công. Lần thử ở `ap-southeast-1` bị Organizations policy chặn một số API; giữ region lab ở `us-east-1`.
 - Xác định quyền quản trị GuardDuty detector thuộc stack lab hay được team quản lý tập trung; không tạo detector trùng hoặc chiếm state ngoài ý muốn.
 - Bật và xác minh network-policy feature trong Amazon VPC CNI; kiểm thử egress, DNS, AWS API và traffic paths trước khi chọn selector cho quarantine.
 - Chốt TTL quarantine, owner, recovery criteria và đường khẩn cấp để tắt auto-response.

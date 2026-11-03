@@ -18,7 +18,7 @@ Repo học tập của DSO-Team5: dựng lab EKS, nhận diện finding GuardDut
 
 ## Trạng thái hiện tại
 
-**Đã có trong repo:** Terraform cho VPC, EKS, GuardDuty EKS Protection/Runtime Monitoring và luồng finding `AttackSequence:EKS/CompromisedCluster` qua EventBridge đến Lambda. EKS, GuardDuty và luồng xử lý chưa được triển khai; lần apply từng phần chỉ tạo một IAM role Lambda rỗng, không có policy gắn vào.
+**Đã triển khai tại `us-east-1`:** VPC, EKS 1.34 với hai worker, GuardDuty EKS Protection/Runtime Monitoring và EventBridge → Lambda. GuardDuty Runtime Monitoring coverage đang healthy; sample `AttackSequence:EKS/CompromisedCluster` đã đi qua EventBridge và xuất hiện trong CloudWatch Logs.
 
 **Lambda hiện chỉ ghi nhận finding (observe-only).** Nó chưa phân tích nguyên nhân đầy đủ và chưa thay đổi workload. Tự động cô lập workload và AI hỗ trợ phân tích nằm trong các giai đoạn tiếp theo.
 
@@ -31,7 +31,7 @@ cd infra/dev
 cp terraform.tfvars.example terraform.tfvars
 ```
 
-Mở `terraform.tfvars`, thay `allowed_cidr_blocks` bằng IP public hiện tại của bạn dạng `/32`. Chọn phiên bản Kubernetes còn được hỗ trợ tại region đã cấu hình (`ap-southeast-1`). Sau đó:
+Mở `terraform.tfvars`, thay `allowed_cidr_blocks` bằng IP public hiện tại của bạn dạng `/32`. Chọn phiên bản Kubernetes còn được hỗ trợ tại region đã cấu hình (`us-east-1`). Sau đó:
 
 ```bash
 terraform init
@@ -58,7 +58,7 @@ AI chỉ tóm tắt evidence và đề xuất. Policy xác thực mới cấp qu
 
 | Giai đoạn | Mục tiêu | Trạng thái |
 |---|---|---|
-| 1. Detection | Dựng EKS lab, bật GuardDuty, thử attack-sequence workshop | Terraform nền tảng đã có; cần chạy lab |
+| 1. Detection | Dựng EKS lab, bật GuardDuty, thử attack-sequence workshop | Đã deploy; sample finding đã đi qua EventBridge; workshop attack simulation còn lại |
 | 2. Analysis | Giữ finding gốc, bổ sung context, correlate timeline | Đang thiết kế |
 | 3. Response | Tự động quarantine hẹp, có kiểm tra và rollback | Chưa triển khai |
 | 4. AI Ops | Tóm tắt evidence và đề xuất playbook; policy vẫn kiểm soát quyền | Chưa triển khai |
