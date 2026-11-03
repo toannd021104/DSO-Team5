@@ -5,3 +5,7 @@ crash.log
 *.tfplan
 .env
 .DS_Store
+
+__pycache__/
+*.py[cod]
+infra/dev/*.zip

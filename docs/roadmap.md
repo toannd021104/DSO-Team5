@@ -1,50 +1,41 @@
 # Roadmap
 
-## 0. Thiết kế (đã hoàn thành)
+## 0. Thiết kế và nền tảng (hoàn thành)
 
-- [x] Chọn AWS region `us-east-1` và profile `guru`.
-- [x] Nghiên cứu GuardDuty, Detective, AWS incident response guidance và các repo playbook mẫu.
-- [x] Vẽ luồng detect → analyze → policy → contain → recover/verify bằng SVG.
-- [x] Dựng Terraform nền tảng EKS + GuardDuty + EventBridge → Lambda observe-only.
-- [x] Deploy VPC/EKS 1.34, hai worker, GuardDuty EKS plans và EventBridge → Lambda observe-only.
-- [x] Xác nhận coverage healthy và gửi sample AttackSequence finding qua Lambda.
-- [ ] Chạy workshop attack-sequence scenario thực tế.
+- [x] Chọn region `us-east-1`, profile `guru`; nghiên cứu AWS docs/workshops và dự án tham khảo.
+- [x] SVG luồng detect → analyze → policy → contain → verify/release.
+- [x] Dựng VPC, EKS 1.34, hai worker, GuardDuty EKS Protection + Runtime Monitoring.
+- [x] EventBridge → Step Functions, retry, SQS DLQ, alarms, DynamoDB incident state, S3 evidence (90 ngày).
 
-## 1. Detection trên sandbox (infrastructure đã deploy)
+## 1. Detection (đã deploy; workshop còn lại)
 
-- [x] Bật EKS Protection và Runtime Monitoring; xác nhận GuardDuty agent coverage healthy.
-- [ ] Chạy Container Security Workshop module 5.3.2 trong cluster riêng.
-- [x] Tạo sample finding và xác nhận EventBridge gọi Lambda; [ ] lưu event fixture đã khử thông tin nhạy cảm từ workshop.
-- Ghi lại prerequisites, chi phí thực tế và bước teardown.
+- [x] GuardDuty plans và managed agent; coverage hiện healthy (1 EKS + 2 EC2).
+- [x] Sample finding qua workflow; sample tổng hợp ngoài account/cluster lab được `NOTIFY_ONLY`.
+- [ ] Chạy Container Security Workshop 5.3.2 để tạo attack sequence thật trong cluster lab và ghi kết quả/cleanup.
 
-**Tiêu chí đạt:** attack-sequence finding được tạo và nhận qua EventBridge; coverage được xác nhận; có thể xoá lab sạch.
+## 2. Evidence analysis (đã deploy; giới hạn rõ)
 
-## 2. Workflow phân tích (observe-only)
+- [x] Lấy finding canonical bằng GuardDuty `GetFindings`; lưu event/finding/analysis vào S3 và trạng thái vào DynamoDB.
+- [x] Trích actor, resource, workload, signals, MITRE indicators; CloudTrail lookup best-effort; lưu root-cause hypothesis và evidence gaps.
+- [x] Deterministic gates theo account, region, type, severity, cluster, namespace và pod exact.
+- [ ] Detective enrichment: SCP hiện từ chối `detective:ListGraphs`.
+- [ ] AI summary: SCP hiện từ chối Bedrock `ListFoundationModels`/`InvokeModel`.
 
-- EventBridge → Step Functions; retry có giới hạn, DLQ và alarm.
-- Validate account/region/schema, idempotency, raw event retention và incident record.
-- Enrich từ GuardDuty, EKS metadata, CloudTrail/audit và Detective context.
-- Xuất root-cause hypothesis có evidence, confidence, blast radius và evidence gaps.
-- Replay finding fixtures để kiểm tra các nhánh policy.
+**Giới hạn:** đây là evidence-based triage, không phải forensic root-cause kết luận hay AI analyst.
 
-**Tiêu chí đạt:** duplicate không nhân đôi incident; thiếu context hoặc API lỗi chỉ notify; mọi kết luận có provenance.
+## 3. Sandbox containment (đã deploy và positive-test)
 
-## 3. Sandbox auto-containment
+- [x] Bật VPC CNI NetworkPolicy và dùng namespace `guarduty-demo`; chỉ pod có opt-in label mới đủ điều kiện.
+- [x] Response role riêng, EKS access entry và Kubernetes RBAC chỉ trong namespace.
+- [x] Tạo policy theo selector pod, xác minh object; Step Functions chờ 15 phút rồi release đúng policy có finding label.
+- [x] Positive test: policy chặn probe vào demo web pod; release gỡ policy; kiểm tra lại trạng thái sạch.
+- [ ] Chạy attack-sequence end-to-end để xác minh GuardDuty finding thật dẫn đến quarantine tự động.
+- [ ] Test false positive, duplicate, timeout, partial failure và rollback trong replay/game-day.
 
-- Enable EKS VPC CNI NetworkPolicy support và xác thực giới hạn theo CNI/OS/IP family.
-- Chỉ auto xử lý exact attack-sequence finding trên cluster/workload allowlist.
-- Dùng role riêng, Kubernetes RBAC hẹp, action ID, TTL, verification, rollback và kill switch.
-- Kiểm thử positive, false-positive, replay, timeout, partial action và recovery.
+## 4. Operations và AI (còn lại)
 
-**Tiêu chí đạt:** containment chỉ tác động đúng workload đã định; policy rollback đúng resource do action tạo; lỗi không gây mutation lặp.
-
-## 4. AI-assisted analysis
-
-- Thêm read-only summarizer trên evidence bundle đã giảm dữ liệu nhạy cảm.
-- Yêu cầu trích dẫn evidence fields và thể hiện uncertainty.
-- So sánh chất lượng với incident đã được người review; policy engine vẫn là nơi duy nhất cho phép action.
-
-## 5. Hardening
-
-- Retention, KMS, CloudWatch metrics/alarms, ownership, runbooks, budget controls và game-day.
-- Mở rộng multi-account hoặc production chỉ sau khi sandbox playbook đạt tiêu chí và quyền đã được rà soát.
+- [ ] Subscribe SNS alarm topic để người vận hành nhận lỗi workflow/DLQ.
+- [ ] Bổ sung coverage-health alarm và dashboard/SLO cho detection, analysis, containment.
+- [ ] Khi policy account cho phép, bật Detective enrichment và AI summarizer read-only có citation.
+- [ ] Chuyển Terraform state sang backend dùng chung có locking trước khi làm nhóm.
+- [ ] Thiết lập budget alert, runbook và teardown; chỉ cân nhắc production sau review quyền/blast radius.

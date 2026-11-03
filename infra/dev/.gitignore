@@ -4,3 +4,7 @@
 *.tfplan
 incident_handler.zip
 terraform.tfvars
+
+analyzer.zip
+remediator.zip
+lambda/__pycache__/

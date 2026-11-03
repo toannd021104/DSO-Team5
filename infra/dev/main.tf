@@ -7,6 +7,8 @@ locals {
   })
 }
 
+data "aws_caller_identity" "current" {}
+
 data "aws_availability_zones" "available" {
   state = "available"
 }
@@ -56,7 +58,10 @@ module "eks" {
     coredns                = {}
     eks-pod-identity-agent = { before_compute = true }
     kube-proxy             = {}
-    vpc-cni                = { before_compute = true }
+    vpc-cni = {
+      before_compute       = true
+      configuration_values = jsonencode({ enableNetworkPolicy = "true" })
+    }
   }
 
   eks_managed_node_groups = {
@@ -112,82 +117,11 @@ resource "aws_guardduty_detector_feature" "runtime_monitoring" {
   }
 }
 
-resource "aws_cloudwatch_log_group" "incident_handler" {
-  name              = "/aws/lambda/${local.name}-incident-handler"
-  retention_in_days = 14
-
-  tags = local.common_tags
-}
-
-resource "aws_iam_role" "incident_handler" {
-  name = "${local.name}-incident-handler"
-
-  assume_role_policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [{
-      Effect = "Allow"
-      Principal = {
-        Service = "lambda.amazonaws.com"
-      }
-      Action = "sts:AssumeRole"
-    }]
-  })
-
-  tags = local.common_tags
-}
-
-resource "aws_iam_role_policy" "incident_handler_logs" {
-  name = "write-own-log-group"
-  role = aws_iam_role.incident_handler.id
-
-  policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [{
-      Effect = "Allow"
-      Action = [
-        "logs:CreateLogStream",
-        "logs:PutLogEvents"
-      ]
-      Resource = "${aws_cloudwatch_log_group.incident_handler.arn}:*"
-    }]
-  })
-}
-
-data "archive_file" "incident_handler" {
-  type        = "zip"
-  source_file = "${path.module}/lambda/incident_handler.py"
-  output_path = "${path.module}/incident_handler.zip"
-}
-
-resource "aws_lambda_function" "incident_handler" {
-  function_name = "${local.name}-incident-handler"
-  description   = "Validates and records GuardDuty findings; observe-only, no remediation."
-  role          = aws_iam_role.incident_handler.arn
-  runtime       = "python3.13"
-  handler       = "incident_handler.handler"
-  timeout       = 30
-  memory_size   = 128
-
-  filename         = data.archive_file.incident_handler.output_path
-  source_code_hash = data.archive_file.incident_handler.output_base64sha256
-
-  environment {
-    variables = {
-      PROJECT_NAME  = local.name
-      RESPONSE_MODE = "observe-only"
-    }
-  }
-
-  depends_on = [aws_iam_role_policy.incident_handler_logs]
-
-  tags = local.common_tags
-}
-
 resource "aws_cloudwatch_event_rule" "attack_sequence" {
   count = var.enable_attack_sequence_event ? 1 : 0
 
   name        = "${local.name}-eks-attack-sequence"
-  description = "Route critical EKS attack sequence findings to the observe-only incident handler."
+  description = "Route critical EKS attack sequence findings to analysis and the guarded sandbox response workflow."
 
   event_pattern = jsonencode({
     source        = ["aws.guardduty"]
@@ -198,22 +132,4 @@ resource "aws_cloudwatch_event_rule" "attack_sequence" {
   })
 
   tags = local.common_tags
-}
-
-resource "aws_cloudwatch_event_target" "incident_handler" {
-  count = var.enable_attack_sequence_event ? 1 : 0
-
-  rule      = aws_cloudwatch_event_rule.attack_sequence[0].name
-  target_id = "${local.name}-incident-handler"
-  arn       = aws_lambda_function.incident_handler.arn
-}
-
-resource "aws_lambda_permission" "allow_eventbridge" {
-  count = var.enable_attack_sequence_event ? 1 : 0
-
-  statement_id  = "AllowExecutionFromEventBridge"
-  action        = "lambda:InvokeFunction"
-  function_name = aws_lambda_function.incident_handler.function_name
-  principal     = "events.amazonaws.com"
-  source_arn    = aws_cloudwatch_event_rule.attack_sequence[0].arn
 }

@@ -1,6 +1,6 @@
 # Luồng phát hiện và ứng phó sự cố EKS
 
-Sơ đồ dưới đây là **luồng mục tiêu** của Guarduty. Terraform đã deploy luồng nền tảng tại `us-east-1`: GuardDuty finding → EventBridge → Lambda observe-only. Sample AttackSequence finding đã tới CloudWatch Logs. Step Functions, Detective enrichment, root-cause workflow, auto-containment và recovery chưa được triển khai.
+Sơ đồ thể hiện luồng Guarduty tại `us-east-1`. Terraform deploy GuardDuty → EventBridge → Step Functions → analyzer; evidence lưu S3/DynamoDB; policy hẹp có thể gọi response Lambda để quarantine pod opted-in bằng NetworkPolicy trong 15 phút rồi tự release. Một sample finding giả lập ngoài account/cluster lab đã đi `NOTIFY_ONLY`. NetworkPolicy data-plane đã được kiểm chứng bằng probe trong demo namespace và rollback. Workshop attack sequence thực tế chưa chạy.
 
 ![Guarduty EKS incident response flow](incident-response-flow.svg)
 
@@ -8,10 +8,10 @@ Sơ đồ dưới đây là **luồng mục tiêu** của Guarduty. Terraform đ
 
 | Bước | Việc xảy ra | Quy tắc thiết kế |
 |---|---|---|
-| 1. Detect | GuardDuty EKS Protection thu tín hiệu audit log; Runtime Monitoring bổ sung hành vi process/network/file. Extended Threat Detection tương quan tín hiệu thành `AttackSequence:EKS/CompromisedCluster`. | Theo dõi Runtime Monitoring coverage riêng; telemetry mất không đồng nghĩa môi trường an toàn. Hạn chế suppression/archive rộng vì archived findings không được dùng làm tín hiệu cho attack sequence. |
+| 1. Detect | GuardDuty EKS Protection thu tín hiệu audit log; Runtime Monitoring bổ sung hành vi process/network/file. Extended Threat Detection tương quan tín hiệu thành `AttackSequence:EKS/CompromisedCluster`. | GuardDuty coverage có thể kiểm tra; alarm tự động cho coverage unhealthy chưa được nối vào stack này. Hạn chế suppression/archive rộng vì archived findings không được dùng làm tín hiệu cho attack sequence. |
 | 2. Ingest | EventBridge lọc finding cần xử lý và chuyển vào workflow. | Validate account, region, finding ID, type và schema. Có retry, DLQ, deduplication và idempotency trước mọi mutation. Lưu event gốc và audit trail có retention. |
-| 3. Analyze | Chuẩn hoá finding, xác định cluster/workload/pod/container/process, chủ sở hữu, IAM/IRSA identity, timeline và blast radius. Detective finding groups giúp điều tra các finding/entity liên quan; EKS audit logs có thể bật làm nguồn dữ liệu Detective. | Finding là bằng chứng đầu vào, không tự nó chứng minh root cause. Giữ nguồn và thời điểm của từng evidence; thiếu context phải giảm confidence. Detective có độ trễ tích luỹ dữ liệu, nên không chặn containment khẩn cấp chỉ để đợi group. |
-| 4. Decide | Policy engine quyết định action theo finding type, severity, environment, target identity, confidence, allowlist và trạng thái coverage. | Policy xác thực và version-controlled là nơi duy nhất cấp quyền. AI chỉ tóm tắt evidence/đề xuất; không tự gọi công cụ mutation hoặc tự nới điều kiện. |
+| 3. Analyze | Analyzer lấy GuardDuty sequence actors/resources/signals/MITRE và workload; CloudTrail lookup theo IAM actor là best-effort. Response adapter mới kiểm tra pod labels/owner/hostNetwork; chưa dựng controller owner, IRSA, process timeline hay blast-radius graph. Detective finding groups là nguồn điều tra bổ sung theo thiết kế, nhưng chưa khả dụng trong account này vì Organizations SCP chặn `detective:ListGraphs`. | Finding là bằng chứng đầu vào, không tự nó chứng minh root cause. Giữ nguồn và thời điểm của từng evidence; thiếu context phải giảm confidence. Detective có độ trễ tích luỹ dữ liệu, nên không chặn containment khẩn cấp chỉ để đợi group. |
+| 4. Decide | Policy hiện xét finding type/severity, account, region, cluster, namespace, workload exact và chế độ auto; adapter kiểm tra pod opt-in, owner controller và hostNetwork. | Policy xác thực và version-controlled là nơi duy nhất cấp quyền. Coverage-health, confidence scoring và AI chưa phải gate hoạt động trong bản lab hiện tại; thiếu/không khớp các gate hiện có thì không remediation. |
 | 5. Contain | Với finding Critical, target xác định rõ trong sandbox và playbook đã bật, workflow tự động cô lập workload bằng action hẹp, có thời hạn. | Ưu tiên reversible containment và giữ pod/evidence để điều tra. Không xoá hàng loạt pod hay node. EKS NetworkPolicy chỉ dùng khi VPC CNI/network-policy feature đã bật và test đúng CNI/OS/address family/traffic paths. |
 | 6. Eradicate & recover | Loại bỏ workload/image/credential bị xâm phạm, sửa cấu hình gốc, triển khai workload sạch, khôi phục traffic và theo dõi tái phát. | Tách containment tạm thời khỏi remediation lâu dài. Xoay vòng credential liên quan; đối chiếu với Git/IaC trước khi đưa cluster về trạng thái chuẩn. |
 | 7. Verify & learn | Xác nhận policy có hiệu lực, dịch vụ liên quan hoạt động, finding không tái diễn; ghi lại action/rollback và metrics. | Có TTL/rollback, kill switch, dead-letter alert và replay test. Đo thời gian detect/analyze/contain, tỷ lệ hành động lỗi và false positive. |
@@ -28,7 +28,7 @@ Mục tiêu “without human intervention” áp dụng cho playbook sandbox đ�
 
 GuardDuty Extended Threat Detection tạo một finding từ chuỗi tín hiệu; Detective hỗ trợ điều tra quan hệ giữa findings và entities, bao gồm Kubernetes API activity, cluster, image/container và dữ liệu audit khi đã bật nguồn phù hợp. Workflow nên tạo **root-cause hypothesis** có evidence, confidence, affected scope và evidence gaps — không ghi một kết luận chắc chắn khi dữ liệu chưa đủ.
 
-AI có thể tạo bản tóm tắt incident theo mẫu:
+Khi được cấp quyền model, AI có thể tạo bản tóm tắt incident theo mẫu. Hiện Bedrock bị Organizations SCP chặn (`ListFoundationModels`/`InvokeModel`), nên workflow chưa gọi AI; analyzer hiện tạo giả thuyết theo luật và ghi rõ evidence gaps. Mẫu tóm tắt dự kiến:
 
 1. Điều gì đã xảy ra và mốc thời gian nào hỗ trợ nhận định đó?
 2. Resource / principal / workload nào bị ảnh hưởng?

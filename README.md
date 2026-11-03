@@ -18,9 +18,11 @@ Repo học tập của DSO-Team5: dựng lab EKS, nhận diện finding GuardDut
 
 ## Trạng thái hiện tại
 
-**Đã triển khai tại `us-east-1`:** VPC, EKS 1.34 với hai worker, GuardDuty EKS Protection/Runtime Monitoring và EventBridge → Lambda. GuardDuty Runtime Monitoring coverage đang healthy; sample `AttackSequence:EKS/CompromisedCluster` đã đi qua EventBridge và xuất hiện trong CloudWatch Logs.
+**Đã triển khai tại `us-east-1`:** VPC, EKS 1.34 với hai worker, GuardDuty EKS Protection/Runtime Monitoring, EventBridge → Step Functions, evidence analyzer, DynamoDB/S3, DLQ/alarms và response adapter giới hạn trong namespace `guarduty-demo`.
 
-**Lambda hiện chỉ ghi nhận finding (observe-only).** Nó chưa phân tích nguyên nhân đầy đủ và chưa thay đổi workload. Tự động cô lập workload và AI hỗ trợ phân tích nằm trong các giai đoạn tiếp theo.
+Analyzer lấy finding chuẩn từ GuardDuty, trích signals/resources/MITRE, thử tra CloudTrail và lưu giả thuyết nguyên nhân cùng evidence gaps. Policy chỉ cho quarantine khi finding Critical là attack sequence EKS, account/region/cluster khớp và có đúng một pod opted-in trong namespace lab. NetworkPolicy quarantine 15 phút đã được kiểm chứng bằng probe bị chặn và rollback. Sample fixture giả lập trỏ sang account/cluster khác nên đã đi nhánh `NOTIFY_ONLY`.
+
+Đây chưa phải AI analyst: Detective và Bedrock bị AWS Organizations SCP từ chối trong account hiện tại. SNS topic đã tạo nhưng chưa có subscription, nên cần subscribe endpoint để nhận alarm.
 
 ## Bắt đầu nhanh
 
@@ -46,22 +48,22 @@ EKS control plane, EC2 worker nodes, NAT Gateway, GuardDuty, CloudWatch Logs và
 
 ## Kiến trúc
 
-Sơ đồ mô tả luồng mục tiêu và các nhánh theo mức rủi ro. Mã Terraform hiện chỉ cài nhánh đầu tiên ở chế độ observe-only; các khối còn lại là kế hoạch triển khai.
+Sơ đồ mô tả luồng đã triển khai và các nhánh theo mức rủi ro. Phân tích hiện là evidence-based/deterministic; Detective và AI summarization là phần mở rộng chưa khả dụng trong account này.
 
 ![Luồng EKS incident response của Guarduty](docs/incident-response-flow.svg)
 
 Đọc phần [mô tả từng bước](docs/incident-response-flow.md) để xem rule quyết định, root-cause analysis, giới hạn NetworkPolicy, rollback và nguồn tham khảo.
 
-AI chỉ tóm tắt evidence và đề xuất. Policy xác thực mới cấp quyền; nếu thiếu context, workflow chuyển sang notify-only.
+AI summarization chưa bật. Policy deterministic mới cấp quyền; nếu thiếu context, workflow chuyển sang notify-only.
 
 ## Lộ trình
 
 | Giai đoạn | Mục tiêu | Trạng thái |
 |---|---|---|
-| 1. Detection | Dựng EKS lab, bật GuardDuty, thử attack-sequence workshop | Đã deploy; sample finding đã đi qua EventBridge; workshop attack simulation còn lại |
-| 2. Analysis | Giữ finding gốc, bổ sung context, correlate timeline | Đang thiết kế |
-| 3. Response | Tự động quarantine hẹp, có kiểm tra và rollback | Chưa triển khai |
-| 4. AI Ops | Tóm tắt evidence và đề xuất playbook; policy vẫn kiểm soát quyền | Chưa triển khai |
+| 1. Detection | Dựng EKS lab, bật GuardDuty, thử attack-sequence workshop | Đã deploy; sample event chạy qua workflow; workshop attack simulation còn lại |
+| 2. Analysis | Giữ finding gốc, bổ sung context, correlate timeline | Đã deploy; Detective enrichment bị SCP chặn |
+| 3. Response | Tự động quarantine hẹp, có kiểm tra và rollback | Đã deploy; adapter đã positive-test trên workload demo |
+| 4. AI Ops | Tóm tắt evidence và đề xuất playbook; policy vẫn kiểm soát quyền | Chưa deploy; Bedrock bị SCP chặn |
 
 Chi tiết acceptance criteria ở [roadmap](docs/roadmap.md).
 
@@ -69,7 +71,7 @@ Chi tiết acceptance criteria ở [roadmap](docs/roadmap.md).
 
 ```text
 infra/dev/       Terraform cho lab AWS
-  lambda/        Handler nhận GuardDuty finding, chỉ ghi log
+  lambda/        Analyzer evidence-first và response adapter NetworkPolicy
   *.tf           VPC, EKS, GuardDuty, EventBridge, IAM, Lambda
   README.md      Cách cấu hình, deploy và destroy
 

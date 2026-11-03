@@ -1,16 +1,12 @@
 # AWS lab: EKS + GuardDuty
 
-Stack này dựng một VPC riêng, EKS với worker nodes trong private subnet, GuardDuty EKS Protection, Runtime Monitoring và luồng EventBridge → Lambda.
-
-> Lambda hiện ở chế độ **observe-only**: kiểm tra một số trường của finding rồi ghi summary vào CloudWatch Logs. Lambda không có quyền gọi Kubernetes API và không tự khắc phục sự cố.
+Stack dựng VPC/EKS, GuardDuty EKS Protection + Runtime Monitoring và workflow EventBridge → Step Functions → analyzer. Analyzer lưu GuardDuty evidence vào S3/DynamoDB; response adapter riêng có Kubernetes RBAC giới hạn trong namespace demo và tạo NetworkPolicy quarantine có TTL.
 
 ## Trạng thái triển khai hiện tại
 
-Stack đã deploy ở `us-east-1`: VPC, EKS 1.34, hai EC2 workers, GuardDuty EKS Protection/Runtime Monitoring, EventBridge rule và Lambda observe-only. GuardDuty agent được quản lý tự động; coverage hiện healthy cho cluster và hai worker. Sample finding `AttackSequence:EKS/CompromisedCluster` đã kích hoạt Lambda và được ghi vào CloudWatch Logs.
+Stack deploy tại `us-east-1`: VPC, EKS 1.34, hai EC2 workers, GuardDuty plans, EventBridge/Step Functions, analyzer, encrypted S3 evidence (90 ngày), DynamoDB (PITR + TTL), DLQ/alarms và VPC-connected response Lambda. Analyzer tạo evidence-based root-cause hypothesis; không gọi AI. AWS Organizations SCP chặn Detective/Bedrock. Quarantine 15 phút cho pod demo opted-in đã được positive-test; sample finding fixture ngoài account/cluster nhận `NOTIFY_ONLY`. SNS topic chưa có subscriber.
 
-Terraform state đang lưu local tại workspace triển khai; không xoá hoặc thay máy làm việc trước khi chuyển state sang backend dùng chung. Region `ap-southeast-1` bị AWS Organizations policy chặn một số API discovery/create; lab hiện chạy tại `us-east-1`.
-
-Stack **chưa** có Step Functions, Detective integration, root-cause analysis workflow hay auto-remediation. Lambda hiện chỉ validate finding và log summary.
+Terraform state lưu local; chuyển sang backend dùng chung trước khi nhiều người cùng apply. Region lab là `us-east-1`; các thao tác Terraform phải dùng đúng workspace/state hiện có để tránh tạo stack trùng.
 
 ## Điều kiện cần
 
@@ -62,10 +58,10 @@ aws eks update-kubeconfig \
   --name "$(terraform output -raw eks_cluster_name)"
 ```
 
-Theo dõi finding đã được Lambda nhận:
+Theo dõi log của analyzer Lambda trong workflow:
 
 ```bash
-aws logs tail "$(terraform output -raw incident_handler_log_group)" \
+aws logs tail "/aws/lambda/guarduty-dev-analyzer" \
   --profile guru \
   --region us-east-1 \
   --follow

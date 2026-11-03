@@ -35,9 +35,26 @@ variable "enable_runtime_monitoring" {
 }
 
 variable "enable_attack_sequence_event" {
-  description = "Route critical EKS attack sequence findings to the observe-only Lambda."
+  description = "Route critical EKS attack sequence findings into the incident workflow."
   type        = bool
   default     = true
+}
+
+variable "auto_remediation_enabled" {
+  description = "Allow the deterministic policy to quarantine only opted-in pods in the dedicated sandbox namespace."
+  type        = bool
+  default     = true
+}
+
+variable "remediation_namespace" {
+  description = "Dedicated namespace containing only workloads explicitly opted into sandbox quarantine."
+  type        = string
+  default     = "guarduty-demo"
+
+  validation {
+    condition     = can(regex("^[a-z0-9]([-a-z0-9]*[a-z0-9])?$", var.remediation_namespace)) && var.remediation_namespace != "kube-system"
+    error_message = "Use a valid, dedicated non-system Kubernetes namespace."
+  }
 }
 
 variable "node_instance_types" {
