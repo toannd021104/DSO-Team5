@@ -4,6 +4,12 @@ Stack này dựng một VPC riêng, EKS với worker nodes trong private subnet,
 
 > Lambda hiện ở chế độ **observe-only**: kiểm tra một số trường của finding rồi ghi summary vào CloudWatch Logs. Lambda không có quyền gọi Kubernetes API và không tự khắc phục sự cố.
 
+## Trạng thái triển khai hiện tại
+
+EKS, GuardDuty, VPC, EventBridge, Lambda và log group chưa được triển khai. Một lần apply từng phần chỉ tạo role `guarduty-dev-incident-handler`; role này không có managed policy hoặc inline policy. Role đang nằm trong Terraform state local tại workspace triển khai.
+
+AWS Organizations SCP hiện explicit-deny các API cần thiết để tiếp tục (bao gồm `ec2:DescribeAvailabilityZones`, `ec2:CreateVpc`, `eks:ListClusters`, `guardduty:ListDetectors`, `logs:CreateLogGroup` và `events:TagResource`). Vì vậy không thể triển khai các phần còn lại bằng profile hiện tại.
+
 ## Điều kiện cần
 
 - Terraform `1.13.x`

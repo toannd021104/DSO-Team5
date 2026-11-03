@@ -18,7 +18,7 @@ Repo học tập của DSO-Team5: dựng lab EKS, nhận diện finding GuardDut
 
 ## Trạng thái hiện tại
 
-**Đã có trong repo:** Terraform cho VPC, EKS, GuardDuty EKS Protection/Runtime Monitoring và luồng finding `AttackSequence:EKS/CompromisedCluster` qua EventBridge đến Lambda. Hạ tầng AWS chưa được triển khai.
+**Đã có trong repo:** Terraform cho VPC, EKS, GuardDuty EKS Protection/Runtime Monitoring và luồng finding `AttackSequence:EKS/CompromisedCluster` qua EventBridge đến Lambda. EKS, GuardDuty và luồng xử lý chưa được triển khai; lần apply từng phần chỉ tạo một IAM role Lambda rỗng, không có policy gắn vào.
 
 **Lambda hiện chỉ ghi nhận finding (observe-only).** Nó chưa phân tích nguyên nhân đầy đủ và chưa thay đổi workload. Tự động cô lập workload và AI hỗ trợ phân tích nằm trong các giai đoạn tiếp theo.
 
