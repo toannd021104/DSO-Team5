@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1920 1400" role="img" aria-labelledby="title desc">
   <title id="title">Guarduty EKS incident response flow</title>
-  <desc id="desc">GuardDuty detection flows through EventBridge and Step Functions for enrichment and root cause analysis, then deterministic policy selects automated containment, approval, or notify-only. Actions are verified, rolled back when needed, and recorded.</desc>
+  <desc id="desc">GuardDuty EKS attack-sequence and Runtime Monitoring findings flow through EventBridge and Step Functions for evidence analysis, then deterministic policy selects automated containment, approval, or notify-only. Actions are verified, rolled back when needed, and recorded.</desc>
   <defs>
     <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#f7faff"/><stop offset="1" stop-color="#eef3fb"/></linearGradient>
     <linearGradient id="hero" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#172b4d"/><stop offset="1" stop-color="#254d75"/></linearGradient>
@@ -45,14 +45,14 @@
   <rect x="84" y="340" width="305" height="38" rx="19" fill="#e8f5ef"/>
   <text x="102" y="364" class="pill" fill="#16865b">RUNTIME MONITORING</text>
   <text x="84" y="411" class="body">Process · file · network behavior</text>
-  <text x="84" y="440" class="small">Attack sequence · Critical</text>
-  <text x="84" y="462" class="small">Coverage theo dõi riêng</text>
+  <text x="84" y="440" class="small">DNS canary → runtime finding thật</text>
+  <text x="84" y="462" class="small">Attack sequence · Critical</text>
 
   <!-- Event intake -->
   <rect x="455" y="184" width="385" height="300" class="card"/>
   <circle cx="486" cy="218" r="18" fill="#2368a8"/><text x="486" y="223" text-anchor="middle" class="number">2</text>
   <text x="515" y="225" class="card-title">EventBridge → workflow</text>
-  <text x="482" y="270" class="body">• Lọc đúng finding / account / region</text>
+  <text x="482" y="270" class="body">• Rule attack sequence + runtime EKS</text>
   <text x="482" y="302" class="body">• Step Functions điều phối từng bước</text>
   <text x="482" y="334" class="body">• Validate schema, định danh incident</text>
   <text x="482" y="366" class="body">• Dedup + idempotency trước khi sửa</text>
@@ -63,9 +63,9 @@
   <rect x="880" y="184" width="500" height="300" class="card"/>
   <circle cx="911" cy="218" r="18" fill="#7255b5"/><text x="911" y="223" text-anchor="middle" class="number">3</text>
   <text x="940" y="225" class="card-title">Điều tra &amp; dựng timeline</text>
-  <text x="908" y="270" class="body">• GuardDuty signals, actors, resources, MITRE</text>
-  <text x="908" y="302" class="body">• Detective / entity graph (SCP blocked)</text>
-  <text x="908" y="334" class="body">• GuardDuty + CloudTrail best-effort</text>
+  <text x="908" y="270" class="body">• Runtime: process, domain, pod/container</text>
+  <text x="908" y="302" class="body">• Attack sequence: actors, signals, MITRE</text>
+  <text x="908" y="334" class="body">• CloudTrail best-effort · Detective SCP blocked</text>
   <text x="908" y="366" class="body">• Scope exact cluster / namespace / pod</text>
   <rect x="908" y="392" width="444" height="66" rx="12" fill="#f1edfb"/>
   <text x="927" y="419" class="small" font-weight="750">Kết quả: giả thuyết root cause + confidence</text>
@@ -95,7 +95,7 @@
   <text x="91" y="619" class="card-title">Notify-only</text>
   <text x="91" y="654" class="body">Target mơ hồ · evidence thiếu · policy lỗi</text>
   <text x="91" y="686" class="body">Event không hợp lệ · API / policy lỗi</text>
-  <text x="91" y="724" class="small">Không suy đoán resource để chạy lệnh sửa</text>
+  <text x="91" y="724" class="small">SNS publish có kiểm chứng · subscriber chưa cấu hình</text>
 
   <!-- Approval -->
   <rect x="610" y="578" width="500" height="180" rx="18" fill="#fff6e8" stroke="#f0d39a" stroke-width="1.5" filter="url(#shadow)"/>

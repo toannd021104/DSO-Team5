@@ -121,13 +121,31 @@ resource "aws_cloudwatch_event_rule" "attack_sequence" {
   count = var.enable_attack_sequence_event ? 1 : 0
 
   name        = "${local.name}-eks-attack-sequence"
-  description = "Route critical EKS attack sequence findings to analysis and the guarded sandbox response workflow."
+  description = "Route critical EKS attack-sequence findings to analysis and the guarded sandbox response workflow."
 
   event_pattern = jsonencode({
     source        = ["aws.guardduty"]
     "detail-type" = ["GuardDuty Finding"]
     detail = {
       type = ["AttackSequence:EKS/CompromisedCluster"]
+    }
+  })
+
+  tags = local.common_tags
+}
+
+resource "aws_cloudwatch_event_rule" "eks_runtime" {
+  count = var.enable_attack_sequence_event ? 1 : 0
+
+  name        = "${local.name}-eks-runtime-findings"
+  description = "Route EKS Runtime Monitoring findings to evidence analysis and guarded response policy."
+
+  event_pattern = jsonencode({
+    source        = ["aws.guardduty"]
+    "detail-type" = ["GuardDuty Finding"]
+    detail = {
+      resource = { resourceType = ["EKSCluster"] }
+      service  = { featureName = ["RuntimeMonitoring"] }
     }
   })
 

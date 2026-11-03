@@ -11,13 +11,16 @@
 
 - [x] GuardDuty plans và managed agent; coverage hiện healthy (1 EKS + 2 EC2).
 - [x] Sample tổng hợp qua workflow; finding ngoài account/cluster lab được nhận diện duplicate và `NOTIFY_ONLY`.
+- [x] Tạo DNS canary GuardDuty thật; EKS Runtime Monitoring EventBridge pattern match; analyzer replay lưu process/domain/cluster/workload và chọn `NOTIFY_ONLY`.
+- [x] Nhánh `NOTIFY_ONLY` publish structured analysis vào SNS; Step Functions nhận MessageId thành công.
+- [ ] Quan sát EventBridge tự khởi chạy Step Functions từ một EKS Runtime Monitoring event mới sau khi runtime rule được deploy.
 - [x] Chạy mô phỏng runtime giới hạn trong namespace riêng; xác nhận API query trong phạm vi và scan một cổng demo.
 - [ ] Chạy Container Security Workshop 5.3.2 để tạo attack sequence thật trong cluster lab và ghi kết quả/cleanup.
 
 ## 2. Evidence analysis (đã deploy; giới hạn rõ)
 
 - [x] Lấy finding canonical bằng GuardDuty `GetFindings`; lưu event/finding/analysis vào S3 và trạng thái vào DynamoDB.
-- [x] Trích actor, resource, workload, signals, MITRE indicators; CloudTrail lookup best-effort; lưu root-cause hypothesis và evidence gaps.
+- [x] Trích sequence actors/signals/MITRE và runtime process/instance/domain/cluster/pod/container; CloudTrail lookup best-effort; lưu root-cause hypothesis và evidence gaps.
 - [x] Deterministic gates theo account, region, type, severity, cluster, namespace và pod exact.
 - [ ] Detective enrichment: SCP hiện từ chối `detective:ListGraphs`.
 - [ ] AI summary: SCP hiện từ chối Bedrock `ListFoundationModels`/`InvokeModel`.
@@ -35,7 +38,7 @@
 
 ## 4. Operations và AI (còn lại)
 
-- [ ] Subscribe SNS alarm topic để người vận hành nhận lỗi workflow/DLQ.
+- [ ] Subscribe SNS topic tới endpoint vận hành để nhận per-finding notification và lỗi workflow/DLQ.
 - [ ] Bổ sung coverage-health alarm và dashboard/SLO cho detection, analysis, containment.
 - [ ] Khi policy account cho phép, bật Detective enrichment và AI summarizer read-only có citation.
 - [ ] Chuyển Terraform state sang backend dùng chung có locking trước khi làm nhóm.

@@ -26,3 +26,13 @@ kubectl delete namespace guarduty-workshop --wait=true
 ```
 
 Xác nhận namespace đã được xoá trước khi chạy lại.
+
+## Tuỳ chọn: kiểm tra DNS finding của GuardDuty
+
+AWS hướng dẫn tạo một DNS request tới `guarddutyc2activityb.com` để kiểm tra finding C&C của Runtime Monitoring ([GuardDuty Runtime Monitoring finding types](https://docs.aws.amazon.com/guardduty/latest/ug/findings-runtime-monitoring.html)). Lệnh sau chỉ tra cứu DNS từ pod demo, không kết nối tới địa chỉ được trả về:
+
+```bash
+kubectl exec -n guarduty-demo deployment/guarduty-demo-victim -- nslookup guarddutyc2activityb.com
+```
+
+Finding được xuất bản bất đồng bộ. Đây là runtime finding đơn lẻ, không phải `AttackSequence:EKS/CompromisedCluster`; EventBridge rule hiện tại chỉ nhận attack-sequence type nên bước này không kiểm thử analyzer hoặc remediation workflow. Chỉ dùng workload demo. Khi kiểm tra xong, xác nhận pod còn `Running` và không có NetworkPolicy quarantine ngoài dự kiến.

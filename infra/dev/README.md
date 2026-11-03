@@ -7,14 +7,14 @@ Terraform root module này dựng sandbox Guarduty tại `us-east-1`.
 - VPC riêng, private subnet cho EKS worker, một NAT Gateway và EKS cluster.
 - Managed node group và VPC CNI bật Kubernetes NetworkPolicy.
 - GuardDuty EKS Protection và Runtime Monitoring.
-- EventBridge chuyển finding vào Step Functions Standard workflow.
+- EventBridge có rule riêng chuyển EKS attack sequence và EKS Runtime Monitoring findings vào Step Functions Standard workflow.
 - Analyzer Lambda, S3 evidence bucket mã hoá, DynamoDB incident table, SQS DLQ, CloudWatch logs/alarms và SNS topic.
 - Response Lambda riêng với EKS access entry và Kubernetes RBAC giới hạn trong namespace.
 - Workload NGINX demo trong `guarduty-demo`, đã opt-in vào playbook quarantine.
 
-Analyzer ghi giả thuyết dựa trên GuardDuty evidence và truy vấn CloudTrail best-effort. Analyzer chưa gọi AI model. AWS Organizations SCP của account hiện tại chặn Detective và Bedrock. SNS topic chưa có subscription; cần cấu hình destination để nhận alarm.
+Analyzer ghi giả thuyết dựa trên GuardDuty evidence và truy vấn CloudTrail best-effort. Runtime DNS canary đã tạo finding thật; analyzer replay đã lưu process, domain, cluster và workload với confidence trung bình. Nhánh `NOTIFY_ONLY` đã publish structured message tới SNS thành công. Analyzer chưa gọi AI model; Organizations SCP chặn Detective và Bedrock. SNS topic chưa có subscription nên chưa có người nhận.
 
-Response policy có thể áp dụng NetworkPolicy cho đúng pod trong 15 phút. Adapter và rollback đã được kiểm tra riêng bằng probe mạng. Bài mô phỏng runtime giới hạn đã chạy trong namespace riêng và xác nhận HTTP/API activity, nhưng chưa tạo được GuardDuty finding mới trong cửa sổ theo dõi ban đầu. Chưa chạy attack-sequence workshop end-to-end qua auto-containment.
+Response policy có thể áp dụng NetworkPolicy cho đúng pod trong 15 phút. Adapter và rollback đã được kiểm tra riêng bằng probe mạng. Bài mô phỏng runtime giới hạn xác nhận HTTP/API activity nhưng không tạo finding. DNS canary riêng đã kiểm chứng runtime detection; chưa chạy attack-sequence workshop end-to-end qua auto-containment.
 
 ## Yêu cầu
 

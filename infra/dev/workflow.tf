@@ -136,6 +136,7 @@ resource "aws_iam_role_policy" "workflow" {
     Version = "2012-10-17"
     Statement = [
       { Effect = "Allow", Action = ["lambda:InvokeFunction"], Resource = [aws_lambda_function.analyzer.arn, aws_lambda_function.remediator.arn] },
+      { Effect = "Allow", Action = ["sns:Publish"], Resource = aws_sns_topic.incident_alerts.arn },
       { Effect = "Allow", Action = ["logs:CreateLogDelivery", "logs:GetLogDelivery", "logs:UpdateLogDelivery", "logs:DeleteLogDelivery", "logs:ListLogDeliveries", "logs:PutResourcePolicy", "logs:DescribeResourcePolicies", "logs:DescribeLogGroups"], Resource = "*" }
     ]
   })
@@ -187,12 +188,21 @@ resource "aws_sfn_state_machine" "incident" {
         Catch          = [{ ErrorEquals = ["States.ALL"], ResultPath = "$.error", Next = "ReleaseFailed" }]
         Next           = "Complete"
       }
-      NotifyOnly        = { Type = "Succeed" }
-      Duplicate         = { Type = "Succeed" }
-      AnalysisFailed    = { Type = "Fail", Error = "AnalysisFailed", Cause = "Finding analysis failed; see workflow logs and incident record." }
-      RemediationFailed = { Type = "Fail", Error = "RemediationFailed", Cause = "Containment failed; see workflow logs and incident record." }
-      ReleaseFailed     = { Type = "Fail", Error = "ReleaseFailed", Cause = "Scheduled containment expiry failed; manually remove the action-specific policy." }
-      Complete          = { Type = "Succeed" }
+      NotifyOnly = {
+        Type       = "Task"
+        Resource   = "arn:aws:states:::sns:publish"
+        Parameters = { TopicArn = aws_sns_topic.incident_alerts.arn, Subject = "Guarduty finding requires review", "Message.$" = "States.JsonToString($.workflow.analysis)" }
+        ResultPath = "$.workflow.notification"
+        Retry      = [{ ErrorEquals = ["States.TaskFailed", "States.Timeout"], IntervalSeconds = 2, BackoffRate = 2, MaxAttempts = 3 }]
+        Catch      = [{ ErrorEquals = ["States.ALL"], ResultPath = "$.error", Next = "NotificationFailed" }]
+        Next       = "Complete"
+      }
+      Duplicate          = { Type = "Succeed" }
+      AnalysisFailed     = { Type = "Fail", Error = "AnalysisFailed", Cause = "Finding analysis failed; see workflow logs and incident record." }
+      RemediationFailed  = { Type = "Fail", Error = "RemediationFailed", Cause = "Containment failed; see workflow logs and incident record." }
+      NotificationFailed = { Type = "Fail", Error = "NotificationFailed", Cause = "Incident notification failed; see workflow logs and alarm topic." }
+      ReleaseFailed      = { Type = "Fail", Error = "ReleaseFailed", Cause = "Scheduled containment expiry failed; manually remove the action-specific policy." }
+      Complete           = { Type = "Succeed" }
     }
   })
   logging_configuration {
@@ -210,7 +220,7 @@ resource "aws_sqs_queue_policy" "workflow_dlq" {
     Version = "2012-10-17"
     Statement = [{
       Effect   = "Allow", Principal = { Service = "events.amazonaws.com" }, Action = "sqs:SendMessage",
-      Resource = aws_sqs_queue.workflow_dlq.arn, Condition = { ArnEquals = { "aws:SourceArn" = aws_cloudwatch_event_rule.attack_sequence[0].arn } }
+      Resource = aws_sqs_queue.workflow_dlq.arn, Condition = { ArnEquals = { "aws:SourceArn" = [aws_cloudwatch_event_rule.attack_sequence[0].arn, aws_cloudwatch_event_rule.eks_runtime[0].arn] } }
     }]
   })
 }
@@ -228,6 +238,22 @@ resource "aws_cloudwatch_event_target" "workflow" {
     maximum_event_age_in_seconds = 3600
     maximum_retry_attempts       = 12
   }
+}
+
+resource "aws_cloudwatch_event_target" "eks_runtime_workflow" {
+  count     = var.enable_attack_sequence_event ? 1 : 0
+  rule      = aws_cloudwatch_event_rule.eks_runtime[0].name
+  target_id = "incident-workflow"
+  arn       = aws_sfn_state_machine.incident.arn
+  role_arn  = aws_iam_role.eventbridge_stepfunctions.arn
+  dead_letter_config {
+    arn = aws_sqs_queue.workflow_dlq.arn
+  }
+  retry_policy {
+    maximum_event_age_in_seconds = 3600
+    maximum_retry_attempts       = 12
+  }
+  depends_on = [aws_iam_role_policy.eventbridge_stepfunctions, aws_sqs_queue_policy.workflow_dlq]
 }
 
 resource "aws_security_group" "remediator" {
@@ -272,7 +298,7 @@ resource "aws_iam_role_policy" "analyzer" {
     Statement = [
       { Effect = "Allow", Action = ["guardduty:GetFindings"], Resource = "arn:aws:guardduty:${var.aws_region}:${data.aws_caller_identity.current.account_id}:detector/${aws_guardduty_detector.this.id}/findings/get" },
       { Effect = "Allow", Action = ["cloudtrail:LookupEvents"], Resource = "*" },
-      { Effect = "Allow", Action = ["dynamodb:PutItem", "dynamodb:UpdateItem"], Resource = aws_dynamodb_table.incidents.arn },
+      { Effect = "Allow", Action = ["dynamodb:GetItem", "dynamodb:PutItem", "dynamodb:UpdateItem"], Resource = aws_dynamodb_table.incidents.arn },
       { Effect = "Allow", Action = ["s3:PutObject"], Resource = "${aws_s3_bucket.incident_evidence.arn}/*" },
       { Effect = "Allow", Action = ["logs:CreateLogStream", "logs:PutLogEvents"], Resource = "${aws_cloudwatch_log_group.analyzer.arn}:*" }
     ]

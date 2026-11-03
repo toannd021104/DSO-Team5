@@ -2,9 +2,9 @@
 
 ## Trạng thái triển khai
 
-Stack deploy ở `us-east-1`: VPC/EKS, GuardDuty EKS Protection/Runtime Monitoring, EventBridge → Step Functions, analyzer, S3/DynamoDB evidence store, DLQ/alarms và response Lambda trong VPC. Sample AttackSequence fixture ngoài account/cluster lab được xử lý `NOTIFY_ONLY`. Quarantine NetworkPolicy trên pod opted-in đã được test bằng probe mạng và release.
+Stack deploy ở `us-east-1`: VPC/EKS, GuardDuty EKS Protection/Runtime Monitoring, hai EventBridge rule cho EKS attack sequence và EKS Runtime Monitoring findings, Step Functions, analyzer, S3/DynamoDB evidence store, DLQ/alarms và response Lambda trong VPC. Event pattern của runtime rule khớp canary finding; replay qua Step Functions trích process, domain, cluster và pod rồi chọn `NOTIFY_ONLY`. EventBridge pattern chưa được kiểm chứng bằng một event canary tự phát sau khi rule được tạo. Sample AttackSequence fixture ngoài account/cluster lab cũng được xử lý `NOTIFY_ONLY`. Quarantine NetworkPolicy trên pod opted-in đã được test bằng probe mạng và release.
 
-Detective API và Bedrock bị từ chối bởi AWS Organizations SCP; vì vậy không có Detective enrichment hay AI summary hoạt động. SNS alarm topic chưa có subscription.
+Detective API và Bedrock bị từ chối bởi AWS Organizations SCP; vì vậy không có Detective enrichment hay AI summary hoạt động. `NotifyOnly` đã publish structured analysis vào SNS thành công; topic chưa có subscription nên chưa chuyển tới người nhận.
 
 ## Luồng mục tiêu
 
@@ -23,7 +23,7 @@ Sơ đồ đầy đủ, bao gồm phân tích nguyên nhân, policy gate, sandbo
 | Amazon Detective | Nguồn enrichment thiết kế; chưa hoạt động trong account hiện tại do Organizations SCP chặn `detective:ListGraphs`. |
 | Policy evaluator | Analyzer xét finding type/severity, account/region/cluster, namespace và một pod exact; adapter kiểm tra opt-in label, owner controller và hostNetwork. Coverage/confidence chưa là gate. |
 | Response adapter | Thực thi một playbook giới hạn; role và Kubernetes RBAC tách khỏi quyền enrich. |
-| CloudWatch / notification | Workflow failure và DLQ alarms; SNS topic chưa có subscription. Coverage alarm và per-finding notification chưa triển khai. |
+| CloudWatch / notification | Workflow failure/DLQ alarms và per-finding `NOTIFY_ONLY` đều publish vào SNS. Topic chưa có subscription; coverage alarm chưa triển khai. |
 
 ## Luồng xử lý
 
@@ -60,6 +60,6 @@ Amazon VPC CNI phải được cấu hình hỗ trợ network policy trước kh
 
 1. Detection, EventBridge/Step Functions, evidence store, analyzer và guarded sandbox quarantine/release (đã deploy; sample finding đã đi notify-only, adapter đã positive-test).
 2. Workshop attack sequence end-to-end và replay các nhánh failure.
-3. Thêm per-finding notification và subscribe SNS alarm topic.
+3. Subscribe SNS topic tới endpoint vận hành đã chọn; xác nhận nhận được workflow alarm và per-finding notification.
 4. Bật Detective/AI analyst read-only sau khi SCP/quyền account cho phép; đo chất lượng và evidence citation.
 5. Hardening, game-day và review blast radius trước khi cân nhắc production.

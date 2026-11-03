@@ -27,15 +27,16 @@ Detect → Analyze → Decide → Contain → Verify / Release
 |---|---|
 | EKS, VPC, hai worker node | Đã deploy tại `us-east-1` |
 | GuardDuty EKS Protection và Runtime Monitoring | Đã bật; coverage gần nhất healthy cho 1 EKS và 2 EC2 |
-| EventBridge → Step Functions → analyzer | Đã deploy; sample tổng hợp đi qua workflow và được đánh dấu duplicate |
+| EventBridge → Step Functions → analyzer | Đã deploy rule cho attack sequence và EKS Runtime Monitoring; event pattern khớp canary, analyzer đã xử lý finding thật qua replay |
 | Evidence | S3 mã hoá, retention 90 ngày; DynamoDB mã hoá, PITR và TTL 90 ngày |
 | Sandbox quarantine | NetworkPolicy adapter đã kiểm chứng bằng probe mạng và rollback |
-| Reduced runtime simulation | Đã chạy HTTP, một cổng TCP và truy vấn Kubernetes API có giới hạn; đã xoá namespace |
+| Runtime detection canary | GuardDuty sinh `Backdoor:Runtime/C&CActivity.B!DNS`; analyzer lưu process, domain, pod/container và cluster; policy chọn `NOTIFY_ONLY` |
+| Reduced runtime simulation | Đã chạy HTTP, một cổng TCP và truy vấn Kubernetes API có giới hạn; đã xoá namespace; hoạt động này không sinh finding |
 | Attack sequence workshop end-to-end | Chưa chạy; mô phỏng giới hạn không tạo finding mới trong lần quan sát này |
 | Amazon Detective và Bedrock | Bị AWS Organizations SCP chặn |
-| SNS nhận alarm | Topic đã tạo; chưa có subscription |
+| SNS notification | Notify-only workflow và workflow alarms đã publish tới topic; chưa có subscription nhận |
 
-Analyzer hiện tạo **root-cause hypothesis** có evidence và evidence gaps; đây chưa phải kết luận forensic hay AI analysis. Workflow chỉ tự quarantine khi các điều kiện allowlist khớp. Sample finding ngoài account/cluster lab đã rẽ sang `NOTIFY_ONLY`.
+Analyzer hiện tạo **root-cause hypothesis** có evidence và evidence gaps; đây chưa phải kết luận forensic hay AI analysis. Canary DNS đã tạo finding thật và được replay qua analyzer; EventBridge pattern đã được xác nhận khớp. Workflow publish thông báo SNS cho nhánh `NOTIFY_ONLY`; hiện topic chưa có subscriber. Workflow chỉ tự quarantine attack sequence khi các điều kiện allowlist khớp. Sample finding ngoài account/cluster lab và runtime canary đều đi `NOTIFY_ONLY`.
 
 Có thể xem cách chạy và dọn bài [mô phỏng runtime giới hạn](examples/safe-eks-runtime-simulation/README.md). Bài này không đại diện cho toàn bộ attack sequence của AWS workshop.
 

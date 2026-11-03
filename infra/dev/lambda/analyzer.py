@@ -44,6 +44,37 @@ def _evidence(finding):
     actors = sequence.get("Actors") or []
     signals = sequence.get("Signals") or []
     indicators = sequence.get("SequenceIndicators") or []
+    service = finding.get("Service") or {}
+    resource = finding.get("Resource") or {}
+    instance = resource.get("InstanceDetails") or {}
+    eks = resource.get("EksClusterDetails") or instance.get("EksClusterDetails") or {}
+    if eks.get("Name"):
+        clusters.append({"name": eks.get("Name"), "arn": eks.get("Arn"), "account": finding.get("AccountId"), "status": eks.get("Status")})
+    kubernetes = ((resource.get("KubernetesDetails") or {}).get("KubernetesWorkloadDetails") or {})
+    if kubernetes.get("Name"):
+        workloads.append({
+            "name": kubernetes.get("Name"),
+            "namespace": kubernetes.get("Namespace"),
+            "kind": kubernetes.get("Type"),
+            "container_uids": [c.get("Id") for c in kubernetes.get("Containers", []) if c.get("Id")],
+        })
+    for container in kubernetes.get("Containers", []):
+        containers.append({"name": container.get("Name"), "uid": container.get("Id"), "image": container.get("Image")})
+    runtime = service.get("RuntimeDetails") or {}
+    process = runtime.get("Process") or {}
+    dns = ((service.get("Action") or {}).get("DnsRequestAction") or {})
+    runtime_context = {
+        "instance": {"id": instance.get("InstanceId"), "type": instance.get("InstanceType")} if instance else {},
+        "process": process,
+        "dns_request": dns,
+    } if process or dns or instance else {}
+    if not signals and (finding.get("Type") or finding.get("Description")):
+        signals = [{
+            "Name": finding.get("Type"),
+            "Description": finding.get("Description"),
+            "FirstSeenAt": service.get("EventFirstSeen"),
+            "LastSeenAt": service.get("EventLastSeen"),
+        }]
     return {
         "clusters": clusters,
         "workloads": workloads,
@@ -51,6 +82,7 @@ def _evidence(finding):
         "actors": [{"id": a.get("Id"), "user": (a.get("User") or {}).get("Name"), "type": (a.get("User") or {}).get("Type")} for a in actors],
         "signals": [{"type": s.get("Name"), "description": s.get("Description"), "first_seen": s.get("FirstSeenAt"), "last_seen": s.get("LastSeenAt")} for s in signals],
         "mitre_indicators": [{"key": i.get("Key"), "values": i.get("Values", [])} for i in indicators],
+        "runtime_context": runtime_context,
     }
 
 
@@ -116,10 +148,16 @@ def handler(event, _context):
         and exact_workloads[0].get("kind", "").lower() == "pods"
     )
     rationale = "Exact critical EKS attack sequence and opted-in sandbox target candidate." if auto_remediate else "Evidence did not satisfy every account, region, cluster, namespace, workload, severity, and opt-in gate; notify-only."
+    finding_type = finding.get("Type") or "unknown"
+    root_cause_hypothesis = (
+        "A correlated EKS attack sequence includes the observed signals and actors; root cause remains a hypothesis until verified against workload and audit evidence."
+        if finding_type == "AttackSequence:EKS/CompromisedCluster"
+        else f"GuardDuty reported {finding_type}; use the recorded runtime process, resource, and network evidence to investigate the initiating behavior. This is a triage hypothesis, not a confirmed root cause."
+    )
     root_cause = {
-        "hypothesis": "A correlated EKS attack sequence includes the observed signals and actors; root cause remains a hypothesis until verified against workload and audit evidence.",
+        "hypothesis": root_cause_hypothesis,
         "confidence": "medium" if evidence["signals"] and evidence["clusters"] else "low",
-        "evidence_sources": ["GuardDuty finding sequence", "CloudTrail lookup (best effort)"],
+        "evidence_sources": ["GuardDuty finding and resource details", "CloudTrail lookup (best effort)"],
         "evidence_gaps": ["Detective graph unavailable or not queried", "EKS pod labels and controller ownership are checked only immediately before containment"],
     }
     record = {
@@ -158,6 +196,16 @@ def handler(event, _context):
         )
     except ClientError as exc:
         if exc.response.get("Error", {}).get("Code") == "ConditionalCheckFailedException":
+            existing = dynamodb.get_item(Key={"finding_id": finding_id}, ConsistentRead=True).get("Item") or {}
+            if existing.get("status") == "ANALYZED_NOTIFY_ONLY":
+                dynamodb.update_item(
+                    Key={"finding_id": finding_id},
+                    UpdateExpression="SET analysis = :analysis, last_analyzed_at = :last_analyzed_at",
+                    ExpressionAttributeValues={
+                        ":analysis": json.dumps(record, default=str),
+                        ":last_analyzed_at": now.isoformat(),
+                    },
+                )
             return {"finding_id": finding_id, "duplicate": True, "auto_remediate": False}
         raise
     log.info("Incident %s decision=%s evidence_signals=%d", finding_id, record["policy"]["decision"], len(evidence["signals"]))
