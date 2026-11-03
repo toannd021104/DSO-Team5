@@ -1,88 +1,120 @@
-# Guarduty — AI Operations for EKS security incidents
+<div align="center">
 
-Guarduty is a learning project for an incident operations loop on Amazon EKS:
+# Guarduty
+
+### AI Operations cho phát hiện và ứng phó sự cố trên Amazon EKS
 
 **Detect → Analyze → Contain → Verify → Learn**
 
-The first milestone uses Amazon GuardDuty findings and deterministic, auditable response workflows. AI may help summarize evidence and recommend a playbook, but it does not choose or execute destructive actions in the MVP. This keeps the project useful for an AI Ops direction while making incident response predictable and reviewable.
+[![AWS](https://img.shields.io/badge/AWS-EKS%20%7C%20GuardDuty-orange?logo=amazonaws)](https://aws.amazon.com/guardduty/)
+[![Terraform](https://img.shields.io/badge/Terraform-1.13%2B-7B42BC?logo=terraform)](https://developer.hashicorp.com/terraform)
+[![Status](https://img.shields.io/badge/status-lab%20MVP-blue)](docs/roadmap.md)
 
-> Current status: architecture and implementation plan. No AWS resources are provisioned by this repository yet.
+Repo học tập của DSO-Team5: dựng lab EKS, nhận diện finding GuardDuty và xây dần quy trình phân tích, phản ứng có kiểm soát.
 
-## Project goals
+</div>
 
-- Demonstrate EKS threat detection using GuardDuty EKS Protection and, where supported, Runtime Monitoring.
-- Explain an incident by preserving the original finding and enriching it with cluster, namespace, workload, pod, process, and timeline context.
-- Automate a small set of reversible, scoped containment actions with idempotency, audit records, and a recovery path.
-- Measure detection-to-containment time and record false positives and action outcomes.
-- Add an AI analyst only after deterministic event processing and response controls work end to end.
+---
 
-## Initial demo path
+## Trạng thái hiện tại
 
-1. Provision a disposable EKS lab and enable GuardDuty protection plans.
-2. Confirm Runtime Monitoring coverage is healthy if that plan is enabled.
-3. Run the AWS Container Security workshop's EKS attack-sequence exercise in the lab account.
-4. Capture the resulting finding and its resource details; correlate it with EKS audit/runtime evidence.
-5. Send the finding through EventBridge to a workflow that records, enriches, and classifies it.
-6. In the first iteration, run in **observe-only** mode. Then enable a narrowly scoped quarantine action in the disposable lab and verify the action and rollback.
+**Đã có:** Terraform tạo VPC, EKS, GuardDuty EKS Protection/Runtime Monitoring và luồng finding `AttackSequence:EKS/CompromisedCluster` qua EventBridge đến Lambda.
 
-Use the AWS workshop instructions and approved test activity only in an isolated account and cluster. Do not run the attack simulation against production workloads.
+**Lambda hiện chỉ ghi nhận finding (observe-only).** Nó chưa phân tích nguyên nhân đầy đủ và chưa thay đổi workload. Tự động cô lập workload và AI hỗ trợ phân tích nằm trong các giai đoạn tiếp theo.
 
-## Proposed architecture
+## Bắt đầu nhanh
+
+> Đây là lab có tính phí. Hãy dùng AWS account riêng, giới hạn IP truy cập EKS và xoá tài nguyên sau khi thử nghiệm.
+
+```bash
+cd infra/dev
+cp terraform.tfvars.example terraform.tfvars
+```
+
+Mở `terraform.tfvars`, thay `allowed_cidr_blocks` bằng IP public hiện tại của bạn dạng `/32`. Chọn phiên bản Kubernetes còn được hỗ trợ tại region đã cấu hình (`ap-southeast-1`). Sau đó:
+
+```bash
+terraform init
+terraform plan -var-file=terraform.tfvars
+```
+
+Đọc kỹ plan trước khi triển khai. Chỉ chạy `terraform apply` khi đã xác nhận account, region, IP truy cập và chi phí. Hướng dẫn cấu hình AWS CLI profile `guru`, kết nối `kubectl` và huỷ lab nằm trong [hướng dẫn Terraform](infra/dev/README.md).
+
+### Chi phí cần lưu ý
+
+EKS control plane, EC2 worker nodes, NAT Gateway, GuardDuty, CloudWatch Logs và data transfer có thể tính phí. Cấu hình mặc định dùng một NAT Gateway để giảm chi phí; đây không phải thiết kế HA cho production.
+
+## Kiến trúc
+
+### Luồng đã được Terraform dựng
 
 ```mermaid
 flowchart LR
-  GD[GuardDuty: EKS Protection + Runtime Monitoring] --> EB[EventBridge rule]
-  EB --> SF[Step Functions response workflow]
-  SF --> D[Deduplication and incident record]
-  D --> E[Enrichment: finding, EKS, CloudTrail]
-  E --> P[Deterministic policy and severity gates]
-  P -->|observe / notify| N[Incident notification]
-  P -->|approved playbook| R[Scoped response adapter]
-  R --> K[EKS API: quarantine / isolate]
-  R --> A[Audit record and action result]
-  E -. later .-> AI[AI analyst: evidence summary and recommendation]
-  AI -. advisory only .-> P
+  GD[GuardDuty] --> EB[EventBridge<br/>lọc EKS Attack Sequence]
+  EB --> L[Lambda<br/>observe-only]
+  L --> CW[CloudWatch Logs]
 ```
 
-A state machine is proposed over a single Lambda so retries, timeouts, branching, and action outcomes are explicit. The response adapter should use a dedicated IAM role, least privilege, EKS access entries/RBAC scoped to the target namespace, and an allow-listed action set. Do not grant cluster-admin to the automation role.
+### Hướng phát triển
 
-## Safety and response policy
+```mermaid
+flowchart LR
+  F[GuardDuty finding] --> V[Validate và deduplicate]
+  V --> E[Enrich evidence và workload context]
+  E --> P[Deterministic policy]
+  P -->|chưa rõ / chỉ quan sát| N[Notify]
+  P -->|đúng điều kiện| R[Scoped response playbook]
+  R --> Q[Quarantine có thời hạn]
+  Q --> C[Verify và rollback]
+  E -. giai đoạn sau .-> AI[AI tóm tắt, nêu evidence]
+  AI -. chỉ đề xuất .-> P
+```
 
-| Finding / context | MVP behavior | Later automation candidate |
+AI không được tự cấp quyền hoặc gọi lệnh thay đổi cluster. Policy xác định hành động; nếu thiếu ngữ cảnh, hệ thống phải chuyển sang cảnh báo thay vì tự sửa.
+
+## Lộ trình
+
+| Giai đoạn | Mục tiêu | Trạng thái |
 |---|---|---|
-| Any finding, unknown resource, or incomplete context | Record and notify; no mutation | Keep observe-only until policy is explicit |
-| Critical `AttackSequence:EKS/CompromisedCluster` in demo cluster | Enrich and notify; simulate action first | Quarantine only the identified workload, then verify |
-| Runtime finding on a production-like cluster | Notify and preserve evidence | Require an approval gate before containment |
-| Agent coverage becomes unhealthy | Alert on coverage gap | Never treat missing telemetry as a clean bill of health |
-| Duplicate/replayed finding | Deduplicate using finding ID and action key | Do not repeat a completed containment action |
+| 1. Detection | Dựng EKS lab, bật GuardDuty, thử attack-sequence workshop | Terraform nền tảng đã có; cần chạy lab |
+| 2. Analysis | Giữ finding gốc, bổ sung context, correlate timeline | Đang thiết kế |
+| 3. Response | Tự động quarantine hẹp, có kiểm tra và rollback | Chưa triển khai |
+| 4. AI Ops | Tóm tắt evidence và đề xuất playbook; policy vẫn kiểm soát quyền | Chưa triển khai |
 
-Containment options must be evaluated per cluster networking and workload ownership. Deleting all pods in a namespace is not a safe general remediation: controllers may recreate them, evidence may be lost, and unrelated services may be affected. Prefer a scoped, reversible quarantine (for example, a NetworkPolicy where the cluster CNI supports the intended semantics), followed by verification and a documented rollback. Node isolation or workload shutdown is a later, higher-impact playbook.
+Chi tiết acceptance criteria ở [roadmap](docs/roadmap.md).
 
-## Repository layout
+## Cấu trúc repo
 
-- `docs/architecture.md` — components, trust boundaries, and event flow.
-- `docs/research.md` — current AWS terminology, workshop findings, and open questions.
-- `docs/roadmap.md` — staged project plan and acceptance criteria.
-- `docs/response-playbooks.md` — proposed actions, gates, verification, and rollback.
-- `docs/adr/0001-deterministic-response-first.md` — why the MVP does not let an LLM execute actions.
-- `examples/eventbridge-attack-sequence-pattern.json` — starter event filter; validate it against real account events before use.
-- `infra/dev/` — Terraform lab stack for VPC, EKS, GuardDuty, EventBridge, and an observe-only incident Lambda.
+```text
+infra/dev/       Terraform cho lab AWS
+  lambda/        Handler nhận GuardDuty finding, chỉ ghi log
+  *.tf           VPC, EKS, GuardDuty, EventBridge, IAM, Lambda
+  README.md      Cách cấu hình, deploy và destroy
 
-## Planned implementation
+docs/            Kiến trúc, nghiên cứu, playbook và roadmap
+examples/        EventBridge event pattern mẫu
+```
 
-1. Validate the workshop scenario and real event payload in an isolated AWS account.
-2. Review and plan the Terraform lab foundation in `infra/dev/`; it creates VPC, EKS, GuardDuty configuration, EventBridge, IAM, logging, and an observe-only Lambda.
-3. Add a deterministic incident handler with a dry-run mode, deduplication, and audit trail.
-4. Add one reversible containment playbook and its verification/rollback path.
-5. Evaluate AI-assisted summaries and recommendations against recorded incidents; keep action authorization outside the model.
+## Tài liệu
 
-## Non-goals for the first milestone
+- [Hướng dẫn Terraform lab](infra/dev/README.md)
+- [Kiến trúc và trust boundaries](docs/architecture.md)
+- [Nghiên cứu GuardDuty và cơ hội cải tiến](docs/research.md)
+- [Response playbooks](docs/response-playbooks.md)
+- [Roadmap và tiêu chí hoàn thành](docs/roadmap.md)
+- [ADR: deterministic response trước AI execution](docs/adr/0001-deterministic-response-first.md)
 
-- Autonomous arbitrary `kubectl` commands or LLM-selected AWS API calls.
-- Broad cluster-admin permissions for Lambda or Step Functions.
-- Automatic destructive remediation in production.
-- Claiming that a finding alone proves root cause. Findings are evidence; enrich and correlate before assigning a cause.
+## Nguồn AWS chính
 
-## Sources
+- [GuardDuty Extended Threat Detection](https://docs.aws.amazon.com/guardduty/latest/ug/guardduty-extended-threat-detection.html)
+- [GuardDuty findings qua EventBridge](https://docs.aws.amazon.com/guardduty/latest/ug/guardduty_findings_eventbridge.html)
+- [GuardDuty Runtime Monitoring](https://docs.aws.amazon.com/guardduty/latest/ug/runtime-monitoring.html)
+- [Workshop: Generate and Respond to an EKS Attack Sequence](https://catalog.workshops.aws/containersecurity/en-US/module5/module5-3/module5-3-2)
 
-See [docs/research.md](docs/research.md) for the source list and what each source informs.
+---
+
+<div align="center">
+
+**DSO-Team5 · Guarduty AI Ops**
+
+</div>

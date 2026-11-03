@@ -1,42 +1,51 @@
-# Development lab
+# AWS lab: EKS + GuardDuty
 
-This stack creates a dedicated VPC, a private-node EKS cluster, GuardDuty EKS Protection, optional EKS Runtime Monitoring, and an EventBridge → Lambda finding path. The Lambda is intentionally **observe-only**: it validates the event and writes a compact summary to CloudWatch. It has no EKS access and cannot remediate workloads.
+Stack này dựng một VPC riêng, EKS với worker nodes trong private subnet, GuardDuty EKS Protection, Runtime Monitoring và luồng EventBridge → Lambda.
 
-## Prerequisites
+> Lambda hiện ở chế độ **observe-only**: kiểm tra một số trường của finding rồi ghi summary vào CloudWatch Logs. Lambda không có quyền gọi Kubernetes API và không tự khắc phục sự cố.
 
-- Terraform 1.13.x
-- AWS CLI credentials for profile `guru`
-- kubectl
-- An AWS region where the selected EKS version and instance type are available
-- Permissions to create VPC, EKS, EC2, IAM, GuardDuty, EventBridge, Lambda, and CloudWatch resources
+## Điều kiện cần
 
-The AWS provider uses the local profile; no credentials are stored in Terraform variables or source control.
+- Terraform `1.13.x`
+- AWS CLI đã cấu hình profile `guru`
+- `kubectl`
+- Quyền tạo VPC, EKS, EC2, IAM, GuardDuty, EventBridge, Lambda và CloudWatch Logs
+- Region có hỗ trợ EKS version và instance type đã chọn
 
-## Configure
+Terraform lấy credentials từ AWS CLI profile tại máy bạn; không ghi access key vào file `.tf` hoặc `terraform.tfvars`.
+
+## 1. Cấu hình lab
 
 ```bash
 cp terraform.tfvars.example terraform.tfvars
 ```
 
-Edit `allowed_cidr_blocks` to your current public IPv4 address in `/32` form. The example address is documentation-only and will not allow access. Keep the EKS public endpoint restricted to your own IP.
+Sửa `terraform.tfvars`:
 
-Check the supported EKS version in the chosen region and update `kubernetes_version` if necessary. Runtime Monitoring uses the current `RUNTIME_MONITORING` feature and GuardDuty-managed EKS add-on setting. The cluster is tagged `GuardDutyManaged=true` for agent management. Existing clusters or accounts with legacy EKS Runtime Monitoring configuration may require migration review.
+- Giữ `aws_profile = "guru"` và `aws_region = "ap-southeast-1"` nếu đó là cấu hình dự định.
+- Chọn Kubernetes version còn được AWS hỗ trợ tại region này.
+- Đổi `allowed_cidr_blocks` thành IP public hiện tại của bạn dạng `/32`, ví dụ `198.51.100.25/32` chỉ là địa chỉ minh hoạ, cần thay bằng IP thật.
 
-## Plan and deploy
+CIDR mở `0.0.0.0/0` bị từ chối để không public EKS API cho mọi nơi.
 
-From this directory:
+## 2. Xem và triển khai Terraform
+
+Chạy từ thư mục `infra/dev`:
 
 ```bash
 terraform init
 terraform fmt -recursive
 terraform validate
 terraform plan -var-file=terraform.tfvars -out=dev.tfplan
+```
+
+Đọc plan, đặc biệt kiểm tra AWS account, region, public CIDR, số worker và tài nguyên GuardDuty. Sau khi xác nhận mới triển khai:
+
+```bash
 terraform apply dev.tfplan
 ```
 
-Review the plan carefully. EKS, NAT Gateway, EC2 nodes, GuardDuty protection, log storage, and data transfer can incur charges. This example uses one NAT Gateway to lower cost and is not highly available.
-
-Configure kubectl after apply:
+## 3. Kết nối tới cluster
 
 ```bash
 aws eks update-kubeconfig \
@@ -45,7 +54,7 @@ aws eks update-kubeconfig \
   --name "$(terraform output -raw eks_cluster_name)"
 ```
 
-Inspect the observe-only Lambda log group:
+Theo dõi finding đã được Lambda nhận:
 
 ```bash
 aws logs tail "$(terraform output -raw incident_handler_log_group)" \
@@ -54,16 +63,24 @@ aws logs tail "$(terraform output -raw incident_handler_log_group)" \
   --follow
 ```
 
-## Runtime Monitoring behavior
+## GuardDuty Runtime Monitoring
 
-GuardDuty Runtime Monitoring coverage depends on agent deployment and healthy connectivity. Verify coverage in GuardDuty before interpreting missing runtime findings as a clean result. EKS Protection is enabled independently and uses EKS audit log signals.
+Stack bật feature `RUNTIME_MONITORING` với `EKS_ADDON_MANAGEMENT`; EKS cluster được gắn tag `GuardDutyManaged=true`. Kiểm tra coverage của cluster trong GuardDuty trước khi đánh giá kết quả. Coverage `Unhealthy` nghĩa là runtime telemetry có thể không tới GuardDuty.
 
-## Destroy the lab
+EKS Protection dùng audit log của Kubernetes và được bật riêng với Runtime Monitoring. Nếu account từng cấu hình EKS Runtime Monitoring kiểu cũ, hãy xem xét migration trước khi đưa Terraform quản lý detector.
 
-Remove any workshop workloads first, then destroy resources from this directory:
+## Chi phí và giới hạn
+
+EKS control plane, EC2, NAT Gateway, GuardDuty, CloudWatch Logs và data transfer có thể tính phí. Stack dùng một NAT Gateway để tiết kiệm, nên không có tính sẵn sàng cao. Đây là cấu hình lab, không phải production.
+
+GuardDuty detector tồn tại ở cấp account và region. Nếu account đã có detector hoặc được quản lý tập trung, hãy xác nhận quyền sở hữu trước khi đưa detector vào Terraform state.
+
+## Xoá lab
+
+Gỡ workload workshop trước, sau đó chạy:
 
 ```bash
 terraform destroy -var-file=terraform.tfvars
 ```
 
-Confirm that the detector features and all lab resources are removed in the AWS console. GuardDuty can be account-level and may already be managed elsewhere; do not adopt an existing detector into this disposable state without reviewing ownership and impact.
+Kiểm tra lại AWS Console để chắc chắn tài nguyên lab đã được xoá. Không xoá detector đang được hệ thống khác sử dụng.
