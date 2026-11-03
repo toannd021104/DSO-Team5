@@ -2,9 +2,7 @@
 *.tfstate
 *.tfstate.*
 *.tfplan
-incident_handler.zip
 terraform.tfvars
-
-analyzer.zip
-remediator.zip
-lambda/__pycache__/
+*.zip
+__pycache__/
+*.py[cod]

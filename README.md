@@ -1,105 +1,137 @@
-<div align="center">
-
 # Guarduty
 
-### AI Operations cho phát hiện và ứng phó sự cố trên Amazon EKS
+**Guarduty** là lab AI Ops cho bảo mật Amazon EKS. Dự án nhận finding từ Amazon GuardDuty, phân tích evidence, áp dụng policy xác định và có thể tự cô lập workload demo bằng Kubernetes NetworkPolicy.
 
-**Detect → Analyze → Contain → Verify → Learn**
+> **Trạng thái:** lab MVP đang chạy tại `us-east-1`. Không dùng cấu hình này cho production.
 
 [![AWS](https://img.shields.io/badge/AWS-EKS%20%7C%20GuardDuty-orange?logo=amazonaws)](https://aws.amazon.com/guardduty/)
-[![Terraform](https://img.shields.io/badge/Terraform-1.13%2B-7B42BC?logo=terraform)](https://developer.hashicorp.com/terraform)
-[![Status](https://img.shields.io/badge/status-lab%20MVP-blue)](docs/roadmap.md)
+[![Terraform](https://img.shields.io/badge/IaC-Terraform-7B42BC?logo=terraform)](https://developer.hashicorp.com/terraform)
 
-Repo học tập của DSO-Team5: dựng lab EKS, nhận diện finding GuardDuty và xây dần quy trình phân tích, phản ứng có kiểm soát.
+## Mục tiêu
 
-</div>
+```text
+Detect → Analyze → Decide → Contain → Verify / Release
+```
 
----
+- **Detect:** GuardDuty EKS Protection và Runtime Monitoring quan sát hoạt động trên cluster.
+- **Analyze:** workflow lấy finding chuẩn từ GuardDuty, trích signals, resources và MITRE indicators; CloudTrail enrichment là best-effort.
+- **Decide:** policy deterministic kiểm tra account, region, cluster, finding type/severity và workload target.
+- **Contain:** response adapter có quyền Kubernetes giới hạn, tạo NetworkPolicy cho đúng pod đã opt-in trong namespace `guarduty-demo`.
+- **Release:** Step Functions gỡ policy sau 15 phút. AI và Amazon Detective chưa hoạt động trong account hiện tại.
 
-## Trạng thái hiện tại
+![Sơ đồ Guarduty detect, analyze, decide, contain và release](docs/incident-response-flow.svg)
 
-**Đã triển khai tại `us-east-1`:** VPC, EKS 1.34 với hai worker, GuardDuty EKS Protection/Runtime Monitoring, EventBridge → Step Functions, evidence analyzer, DynamoDB/S3, DLQ/alarms và response adapter giới hạn trong namespace `guarduty-demo`.
+## Trạng thái triển khai
 
-Analyzer lấy finding chuẩn từ GuardDuty, trích signals/resources/MITRE, thử tra CloudTrail và lưu giả thuyết nguyên nhân cùng evidence gaps. Policy chỉ cho quarantine khi finding Critical là attack sequence EKS, account/region/cluster khớp và có đúng một pod opted-in trong namespace lab. NetworkPolicy quarantine 15 phút đã được kiểm chứng bằng probe bị chặn và rollback. Sample fixture giả lập trỏ sang account/cluster khác nên đã đi nhánh `NOTIFY_ONLY`.
+| Thành phần | Trạng thái |
+|---|---|
+| EKS, VPC, hai worker node | Đã deploy tại `us-east-1` |
+| GuardDuty EKS Protection và Runtime Monitoring | Đã bật; coverage gần nhất healthy cho 1 EKS và 2 EC2 |
+| EventBridge → Step Functions → analyzer | Đã deploy; sample tổng hợp đi qua workflow và được đánh dấu duplicate |
+| Evidence | S3 mã hoá, retention 90 ngày; DynamoDB mã hoá, PITR và TTL 90 ngày |
+| Sandbox quarantine | NetworkPolicy adapter đã kiểm chứng bằng probe mạng và rollback |
+| Reduced runtime simulation | Đã chạy HTTP, một cổng TCP và truy vấn Kubernetes API có giới hạn; đã xoá namespace |
+| Attack sequence workshop end-to-end | Chưa chạy; mô phỏng giới hạn không tạo finding mới trong lần quan sát này |
+| Amazon Detective và Bedrock | Bị AWS Organizations SCP chặn |
+| SNS nhận alarm | Topic đã tạo; chưa có subscription |
 
-Đây chưa phải AI analyst: Detective và Bedrock bị AWS Organizations SCP từ chối trong account hiện tại. SNS topic đã tạo nhưng chưa có subscription, nên cần subscribe endpoint để nhận alarm.
+Analyzer hiện tạo **root-cause hypothesis** có evidence và evidence gaps; đây chưa phải kết luận forensic hay AI analysis. Workflow chỉ tự quarantine khi các điều kiện allowlist khớp. Sample finding ngoài account/cluster lab đã rẽ sang `NOTIFY_ONLY`.
 
-## Bắt đầu nhanh
+Có thể xem cách chạy và dọn bài [mô phỏng runtime giới hạn](examples/safe-eks-runtime-simulation/README.md). Bài này không đại diện cho toàn bộ attack sequence của AWS workshop.
 
-> Đây là lab có tính phí. Hãy dùng AWS account riêng, giới hạn IP truy cập EKS và xoá tài nguyên sau khi thử nghiệm.
+## Bắt đầu
+
+### Điều kiện cần
+
+- AWS CLI và credentials hợp lệ cho account sandbox.
+- Terraform `1.13.x`.
+- `kubectl`.
+- Quyền cần thiết để tạo VPC, EKS, GuardDuty, IAM, Lambda và các dịch vụ liên quan.
+
+Profile mặc định của project là `guru`, region là `us-east-1`. Kiểm tra identity trước khi chạy Terraform:
+
+```bash
+aws sts get-caller-identity --profile guru
+```
+
+### Deploy vào AWS sandbox mới
+
+Stack hiện có trong account dự án; Terraform state được giữ local và **chưa có backend dùng chung**. Chỉ dùng các lệnh dưới đây trong account sandbox mới hoặc sau khi đã cấu hình/import đúng state. Không chạy `apply` trong account đang có stack nếu chưa quản lý state tương ứng.
 
 ```bash
 cd infra/dev
 cp terraform.tfvars.example terraform.tfvars
 ```
 
-Mở `terraform.tfvars`, thay `allowed_cidr_blocks` bằng IP public hiện tại của bạn dạng `/32`. Chọn phiên bản Kubernetes còn được hỗ trợ tại region đã cấu hình (`us-east-1`). Sau đó:
+Sửa `allowed_cidr_blocks` trong `terraform.tfvars` thành địa chỉ IP public của bạn dạng `/32`. Sau đó chạy:
 
 ```bash
 terraform init
-terraform plan -var-file=terraform.tfvars
+terraform fmt -check -recursive
+terraform validate
+terraform plan -var-file=terraform.tfvars -out=dev.tfplan
+terraform apply dev.tfplan
 ```
 
-Đọc kỹ plan trước khi triển khai. Chỉ chạy `terraform apply` khi đã xác nhận account, region, IP truy cập và chi phí. Hướng dẫn cấu hình AWS CLI profile `guru`, kết nối `kubectl` và huỷ lab nằm trong [hướng dẫn Terraform](infra/dev/README.md).
+Đọc plan trước khi apply, nhất là account, region, EKS endpoint CIDR, số node và tài nguyên GuardDuty. Hướng dẫn kết nối cluster, kiểm tra deployment và huỷ lab nằm trong [hướng dẫn môi trường dev](infra/dev/README.md).
 
-### Chi phí cần lưu ý
+## Chi phí và an toàn
 
-EKS control plane, EC2 worker nodes, NAT Gateway, GuardDuty, CloudWatch Logs và data transfer có thể tính phí. Cấu hình mặc định dùng một NAT Gateway để giảm chi phí; đây không phải thiết kế HA cho production.
+EKS control plane, EC2, NAT Gateway, GuardDuty, CloudWatch, lưu trữ và data transfer có thể tính phí. Lab giữ nguyên tài nguyên AWS cho đến khi huỷ; hãy kiểm tra và teardown khi không còn dùng.
 
-## Kiến trúc
+- Không commit `terraform.tfvars`, state, plan, credentials hoặc finding/evidence thật.
+- Không mở EKS API public cho `0.0.0.0/0`.
+- Chỉ bật auto-remediation trong sandbox đã kiểm tra workload và NetworkPolicy.
+- NetworkPolicy quarantine không thay thế eradication, recovery hoặc điều tra forensic.
+- SNS topic cần subscription để alarm được gửi tới người vận hành.
 
-Sơ đồ mô tả luồng đã triển khai và các nhánh theo mức rủi ro. Phân tích hiện là evidence-based/deterministic; Detective và AI summarization là phần mở rộng chưa khả dụng trong account này.
-
-![Luồng EKS incident response của Guarduty](docs/incident-response-flow.svg)
-
-Đọc phần [mô tả từng bước](docs/incident-response-flow.md) để xem rule quyết định, root-cause analysis, giới hạn NetworkPolicy, rollback và nguồn tham khảo.
-
-AI summarization chưa bật. Policy deterministic mới cấp quyền; nếu thiếu context, workflow chuyển sang notify-only.
-
-## Lộ trình
-
-| Giai đoạn | Mục tiêu | Trạng thái |
-|---|---|---|
-| 1. Detection | Dựng EKS lab, bật GuardDuty, thử attack-sequence workshop | Đã deploy; sample event chạy qua workflow; workshop attack simulation còn lại |
-| 2. Analysis | Giữ finding gốc, bổ sung context, correlate timeline | Đã deploy; Detective enrichment bị SCP chặn |
-| 3. Response | Tự động quarantine hẹp, có kiểm tra và rollback | Đã deploy; adapter đã positive-test trên workload demo |
-| 4. AI Ops | Tóm tắt evidence và đề xuất playbook; policy vẫn kiểm soát quyền | Chưa deploy; Bedrock bị SCP chặn |
-
-Chi tiết acceptance criteria ở [roadmap](docs/roadmap.md).
-
-## Cấu trúc repo
+## Cấu trúc repository
 
 ```text
-infra/dev/       Terraform cho lab AWS
-  lambda/        Analyzer evidence-first và response adapter NetworkPolicy
-  *.tf           VPC, EKS, GuardDuty, EventBridge, IAM, Lambda
-  README.md      Cách cấu hình, deploy và destroy
-
-docs/            Kiến trúc, nghiên cứu, playbook và roadmap
-examples/        EventBridge event pattern mẫu
+.
+├── README.md                    # Điểm vào dự án, trạng thái và quick start
+├── CONTRIBUTING.md              # Quy tắc thay đổi code và Terraform
+├── .editorconfig                # Quy ước thụt lề và encoding
+├── docs/
+│   ├── README.md                # Chỉ mục tài liệu
+│   ├── architecture.md          # Thành phần, luồng dữ liệu và ranh giới quyền
+│   ├── incident-response-flow.md
+│   ├── incident-response-flow.svg
+│   ├── response-playbooks.md    # Hành động và điều kiện containment
+│   ├── research.md              # AWS docs, dự án tham khảo và cơ hội cải tiến
+│   ├── roadmap.md               # Trạng thái và phần việc tiếp theo
+│   └── adr/                     # Quyết định kiến trúc đã ghi nhận
+├── examples/
+│   ├── eventbridge-attack-sequence-pattern.json
+│   └── safe-eks-runtime-simulation/ # Lab giới hạn, có hướng dẫn cleanup
+└── infra/
+    ├── README.md                # Chỉ mục hạ tầng
+    └── dev/                     # Terraform root module cho lab hiện tại
+        ├── lambda/              # Analyzer và response adapter
+        ├── main.tf              # VPC, EKS, GuardDuty và event rule
+        ├── workflow.tf          # Step Functions, IAM, storage, alarms
+        ├── variables.tf
+        ├── outputs.tf
+        └── versions.tf          # Terraform/provider constraints
 ```
+
+`infra/dev` hiện là một Terraform root module có chủ đích. Khi xuất hiện môi trường thứ hai hoặc tài nguyên cần dùng lại, có thể tách thành `modules/` với ranh giới rõ; chưa tạo module trừu tượng khi chỉ có một consumer.
 
 ## Tài liệu
 
-- [Hướng dẫn Terraform lab](infra/dev/README.md)
-- [Luồng incident response có sơ đồ SVG](docs/incident-response-flow.md)
+- [Chỉ mục tài liệu](docs/README.md)
 - [Kiến trúc và trust boundaries](docs/architecture.md)
-- [Nghiên cứu GuardDuty và cơ hội cải tiến](docs/research.md)
+- [Luồng ứng phó sự cố](docs/incident-response-flow.md)
 - [Response playbooks](docs/response-playbooks.md)
-- [Roadmap và tiêu chí hoàn thành](docs/roadmap.md)
-- [ADR: deterministic response trước AI execution](docs/adr/0001-deterministic-response-first.md)
+- [Nghiên cứu và cơ hội cải tiến](docs/research.md)
+- [Roadmap và giới hạn hiện tại](docs/roadmap.md)
+- [Terraform lab: deploy, verify, destroy](infra/dev/README.md)
+- [Đóng góp và quy ước repo](CONTRIBUTING.md)
 
-## Nguồn AWS chính
+## AWS references
 
 - [GuardDuty Extended Threat Detection](https://docs.aws.amazon.com/guardduty/latest/ug/guardduty-extended-threat-detection.html)
 - [GuardDuty findings qua EventBridge](https://docs.aws.amazon.com/guardduty/latest/ug/guardduty_findings_eventbridge.html)
 - [GuardDuty Runtime Monitoring](https://docs.aws.amazon.com/guardduty/latest/ug/runtime-monitoring.html)
+- [EKS VPC CNI NetworkPolicy](https://docs.aws.amazon.com/eks/latest/userguide/cni-network-policy.html)
 - [Workshop: Generate and Respond to an EKS Attack Sequence](https://catalog.workshops.aws/containersecurity/en-US/module5/module5-3/module5-3-2)
-
----
-
-<div align="center">
-
-**DSO-Team5 · Guarduty AI Ops**
-
-</div>

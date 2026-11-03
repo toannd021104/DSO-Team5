@@ -1,90 +1,132 @@
-# AWS lab: EKS + GuardDuty
+# Dev lab: EKS + GuardDuty
 
-Stack dựng VPC/EKS, GuardDuty EKS Protection + Runtime Monitoring và workflow EventBridge → Step Functions → analyzer. Analyzer lưu GuardDuty evidence vào S3/DynamoDB; response adapter riêng có Kubernetes RBAC giới hạn trong namespace demo và tạo NetworkPolicy quarantine có TTL.
+Terraform root module này dựng sandbox Guarduty tại `us-east-1`.
 
-## Trạng thái triển khai hiện tại
+## Tài nguyên được tạo
 
-Stack deploy tại `us-east-1`: VPC, EKS 1.34, hai EC2 workers, GuardDuty plans, EventBridge/Step Functions, analyzer, encrypted S3 evidence (90 ngày), DynamoDB (PITR + TTL), DLQ/alarms và VPC-connected response Lambda. Analyzer tạo evidence-based root-cause hypothesis; không gọi AI. AWS Organizations SCP chặn Detective/Bedrock. Quarantine 15 phút cho pod demo opted-in đã được positive-test; sample finding fixture ngoài account/cluster nhận `NOTIFY_ONLY`. SNS topic chưa có subscriber.
+- VPC riêng, private subnet cho EKS worker, một NAT Gateway và EKS cluster.
+- Managed node group và VPC CNI bật Kubernetes NetworkPolicy.
+- GuardDuty EKS Protection và Runtime Monitoring.
+- EventBridge chuyển finding vào Step Functions Standard workflow.
+- Analyzer Lambda, S3 evidence bucket mã hoá, DynamoDB incident table, SQS DLQ, CloudWatch logs/alarms và SNS topic.
+- Response Lambda riêng với EKS access entry và Kubernetes RBAC giới hạn trong namespace.
+- Workload NGINX demo trong `guarduty-demo`, đã opt-in vào playbook quarantine.
 
-Terraform state lưu local; chuyển sang backend dùng chung trước khi nhiều người cùng apply. Region lab là `us-east-1`; các thao tác Terraform phải dùng đúng workspace/state hiện có để tránh tạo stack trùng.
+Analyzer ghi giả thuyết dựa trên GuardDuty evidence và truy vấn CloudTrail best-effort. Analyzer chưa gọi AI model. AWS Organizations SCP của account hiện tại chặn Detective và Bedrock. SNS topic chưa có subscription; cần cấu hình destination để nhận alarm.
 
-## Điều kiện cần
+Response policy có thể áp dụng NetworkPolicy cho đúng pod trong 15 phút. Adapter và rollback đã được kiểm tra riêng bằng probe mạng. Bài mô phỏng runtime giới hạn đã chạy trong namespace riêng và xác nhận HTTP/API activity, nhưng chưa tạo được GuardDuty finding mới trong cửa sổ theo dõi ban đầu. Chưa chạy attack-sequence workshop end-to-end qua auto-containment.
 
-- Terraform `1.13.x`
-- AWS CLI đã cấu hình profile `guru`
-- `kubectl`
-- Quyền tạo VPC, EKS, EC2, IAM, GuardDuty, EventBridge, Lambda và CloudWatch Logs
-- Region có hỗ trợ EKS version và instance type đã chọn
+## Yêu cầu
 
-Terraform lấy credentials từ AWS CLI profile tại máy bạn; không ghi access key vào file `.tf` hoặc `terraform.tfvars`.
+- Terraform `1.13.x` (xem `versions.tf`).
+- AWS CLI có profile được cấp quyền quản lý các tài nguyên nêu trên.
+- `kubectl` để kiểm tra cluster.
+- AWS account sandbox riêng; không dùng production.
+- Public IPv4 CIDR giới hạn cho EKS API endpoint, thường là IP hiện tại dạng `/32`.
 
-## 1. Cấu hình lab
+File `terraform.tfvars.example` dùng profile `guru`, region `us-east-1` và CIDR chỉ dành cho tài liệu. Hãy thay CIDR trước khi apply.
+
+## State và an toàn account
+
+Terraform state của deployment hiện tại được lưu local và không có trong Git. Stack live đã tồn tại trong AWS account của dự án. Clone repo mới không có state đó. Không chạy `apply` từ clone mới vào account hiện hữu: Terraform có thể tạo trùng tài nguyên hoặc xung đột với cấu hình GuardDuty cấp account.
+
+Trước khi nhiều người cùng vận hành, hãy thiết lập remote backend an toàn có locking và migrate state theo quy trình đã review. Hiện tại một operator nên quản lý local state hiện hữu và giữ bản sao lưu được bảo vệ bên ngoài repo.
+
+## Cấu hình và deploy
+
+Chạy trong thư mục này:
 
 ```bash
 cp terraform.tfvars.example terraform.tfvars
 ```
 
-Sửa `terraform.tfvars`:
-
-- Giữ `aws_profile = "guru"` và `aws_region = "us-east-1"` cho lab hiện tại.
-- Chọn Kubernetes version còn được AWS hỗ trợ tại region này.
-- Đổi `allowed_cidr_blocks` thành IP public hiện tại của bạn dạng `/32`, ví dụ `198.51.100.25/32` chỉ là địa chỉ minh hoạ, cần thay bằng IP thật.
-
-CIDR mở `0.0.0.0/0` bị từ chối để không public EKS API cho mọi nơi.
-
-## 2. Xem và triển khai Terraform
-
-Chạy từ thư mục `infra/dev`:
+Sửa `terraform.tfvars`: đặt `allowed_cidr_blocks` thành public IP `/32` hiện tại; xác nhận profile, region, phiên bản Kubernetes, cấu hình node và remediation. Sau đó:
 
 ```bash
+aws sts get-caller-identity --profile guru
 terraform init
-terraform fmt -recursive
+terraform fmt -check -recursive
 terraform validate
 terraform plan -var-file=terraform.tfvars -out=dev.tfplan
 ```
 
-Đọc plan, đặc biệt kiểm tra AWS account, region, public CIDR, số worker và tài nguyên GuardDuty. Sau khi xác nhận mới triển khai:
+Đọc `dev.tfplan`. Xác nhận account, region, CIDR EKS API, quyền sở hữu GuardDuty detector, tài nguyên bị tạo/thay đổi/xoá và chi phí dự kiến. Sau khi plan đúng:
 
 ```bash
 terraform apply dev.tfplan
 ```
 
-## 3. Kết nối tới cluster
+Git bỏ qua `.tfplan`, local state và `terraform.tfvars`. Giữ các file này riêng tư.
+
+## Kết nối cluster
+
+Chạy các lệnh trong `infra/dev`:
 
 ```bash
 aws eks update-kubeconfig \
   --profile guru \
   --region us-east-1 \
   --name "$(terraform output -raw eks_cluster_name)"
+
+kubectl get nodes
+kubectl get pods -n guarduty-demo
 ```
 
-Theo dõi log của analyzer Lambda trong workflow:
+## Kiểm tra dịch vụ đã deploy
+
+Kiểm tra GuardDuty runtime coverage:
 
 ```bash
-aws logs tail "/aws/lambda/guarduty-dev-analyzer" \
+aws guardduty get-coverage-statistics \
+  --profile guru \
+  --region us-east-1 \
+  --detector-id "$(terraform output -raw guardduty_detector_id)" \
+  --statistics-type COUNT_BY_COVERAGE_STATUS COUNT_BY_RESOURCE_TYPE
+```
+
+Kiểm tra alarms và workflow:
+
+```bash
+aws cloudwatch describe-alarms \
+  --profile guru \
+  --region us-east-1 \
+  --alarm-name-prefix guarduty-dev-
+
+aws stepfunctions list-executions \
+  --profile guru \
+  --region us-east-1 \
+  --state-machine-arn "arn:aws:states:us-east-1:$(aws sts get-caller-identity --profile guru --query Account --output text):stateMachine/$(terraform output -raw incident_workflow_name)" \
+  --max-results 10
+```
+
+Theo dõi log của analyzer Lambda:
+
+```bash
+aws logs tail /aws/lambda/guarduty-dev-analyzer \
   --profile guru \
   --region us-east-1 \
   --follow
 ```
 
-## GuardDuty Runtime Monitoring
+Chi tiết kiến trúc và giới hạn hiện tại nằm trong [`docs/architecture.md`](../../docs/architecture.md) và [`docs/response-playbooks.md`](../../docs/response-playbooks.md).
 
-Stack bật feature `RUNTIME_MONITORING` với `EKS_ADDON_MANAGEMENT`; EKS cluster được gắn tag `GuardDutyManaged=true`. Kiểm tra coverage của cluster trong GuardDuty trước khi đánh giá kết quả. Coverage `Unhealthy` nghĩa là runtime telemetry có thể không tới GuardDuty.
+## Chi phí
 
-EKS Protection dùng audit log của Kubernetes và được bật riêng với Runtime Monitoring. Nếu account từng cấu hình EKS Runtime Monitoring kiểu cũ, hãy xem xét migration trước khi đưa Terraform quản lý detector.
+Lab có thể phát sinh phí EKS control plane, EC2 worker, NAT Gateway, GuardDuty, CloudWatch, S3, DynamoDB, Lambda, Step Functions và data transfer. Stack dùng một NAT Gateway để tiết kiệm, không phải topology HA cho production. EKS API endpoint đang public nhưng giới hạn theo CIDR đã cấu hình.
 
-## Chi phí và giới hạn
+## Huỷ lab
 
-EKS control plane, EC2, NAT Gateway, GuardDuty, CloudWatch Logs và data transfer có thể tính phí. Stack dùng một NAT Gateway để tiết kiệm, nên không có tính sẵn sàng cao. Đây là cấu hình lab, không phải production.
-
-GuardDuty detector tồn tại ở cấp account và region. Nếu account đã có detector hoặc được quản lý tập trung, hãy xác nhận quyền sở hữu trước khi đưa detector vào Terraform state.
-
-## Xoá lab
-
-Gỡ workload workshop trước, sau đó chạy:
+Trước tiên gỡ tài nguyên do workshop tạo và xác nhận đúng account/state. Sau đó tạo và đọc destroy plan:
 
 ```bash
-terraform destroy -var-file=terraform.tfvars
+terraform plan -destroy -var-file=terraform.tfvars -out=destroy.tfplan
+terraform show destroy.tfplan
 ```
 
-Kiểm tra lại AWS Console để chắc chắn tài nguyên lab đã được xoá. Không xoá detector đang được hệ thống khác sử dụng.
+Evidence bucket bật `force_destroy`; destroy stack sẽ xoá incident evidence đang lưu. GuardDuty detector có scope account/region; hãy xác nhận detector chỉ thuộc lab trước khi xoá. Nếu plan đúng:
+
+```bash
+terraform apply destroy.tfplan
+```
+
+Sau khi destroy, kiểm tra AWS Console và Kubernetes để xác nhận tài nguyên đã được gỡ. Lưu lại evidence cần cho điều tra trước khi huỷ.

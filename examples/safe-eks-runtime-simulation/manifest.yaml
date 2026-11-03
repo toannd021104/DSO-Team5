@@ -1,0 +1,157 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: guarduty-workshop
+  labels:
+    app.kubernetes.io/part-of: guarduty
+    guarduty.io/environment: sandbox
+---
+apiVersion: v1
+kind: ResourceQuota
+metadata:
+  name: simulation-limits
+  namespace: guarduty-workshop
+spec:
+  hard:
+    pods: "4"
+    requests.cpu: "1"
+    requests.memory: 512Mi
+    limits.cpu: "2"
+    limits.memory: 1Gi
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: scoped-recon
+  namespace: guarduty-workshop
+automountServiceAccountToken: true
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: scoped-recon
+  namespace: guarduty-workshop
+rules:
+  - apiGroups: [""]
+    resources: ["pods"]
+    verbs: ["get", "list"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: scoped-recon
+  namespace: guarduty-workshop
+subjects:
+  - kind: ServiceAccount
+    name: scoped-recon
+    namespace: guarduty-workshop
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: scoped-recon
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: workshop-victim
+  namespace: guarduty-workshop
+  labels:
+    app: workshop-victim
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: workshop-victim
+  template:
+    metadata:
+      labels:
+        app: workshop-victim
+    spec:
+      automountServiceAccountToken: false
+      containers:
+        - name: http-server
+          image: public.ecr.aws/docker/library/python:3.13-alpine
+          command: ["python", "-m", "http.server", "8080", "--bind", "0.0.0.0", "--directory", "/tmp"]
+          ports:
+            - name: http
+              containerPort: 8080
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              cpu: 250m
+              memory: 128Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+            runAsNonRoot: true
+            runAsGroup: 65534
+            runAsUser: 65534
+            readOnlyRootFilesystem: true
+            seccompProfile:
+              type: RuntimeDefault
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: workshop-victim
+  namespace: guarduty-workshop
+spec:
+  selector:
+    app: workshop-victim
+  ports:
+    - name: http
+      port: 80
+      targetPort: 8080
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: scoped-recon
+  namespace: guarduty-workshop
+spec:
+  backoffLimit: 0
+  activeDeadlineSeconds: 300
+  ttlSecondsAfterFinished: 900
+  template:
+    metadata:
+      labels:
+        app: scoped-recon
+    spec:
+      serviceAccountName: scoped-recon
+      restartPolicy: Never
+      securityContext:
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: scanner
+          image: alpine:3.21
+          command: ["/bin/sh", "-ec"]
+          args:
+            - |
+              apk add --no-cache curl nmap
+              curl --fail --silent --show-error -o /dev/null -w 'HTTP %{http_code}\n' http://workshop-victim.guarduty-workshop.svc.cluster.local:80/
+              nmap -Pn -sT -p 80 workshop-victim.guarduty-workshop.svc.cluster.local
+              token="$(cat /var/run/secrets/kubernetes.io/serviceaccount/token)"
+              curl --fail --silent --show-error \
+                --cacert /var/run/secrets/kubernetes.io/serviceaccount/ca.crt \
+                -H "Authorization: Bearer ${token}" \
+                "https://${KUBERNETES_SERVICE_HOST}:${KUBERNETES_SERVICE_PORT}/api/v1/namespaces/guarduty-workshop/pods" \
+                -o /dev/null
+          resources:
+            requests:
+              cpu: 100m
+              memory: 96Mi
+            limits:
+              cpu: 500m
+              memory: 256Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+            runAsNonRoot: false
+            runAsUser: 0
+            seccompProfile:
+              type: RuntimeDefault

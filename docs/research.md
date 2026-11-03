@@ -18,6 +18,12 @@ Checked against AWS documentation on 2026-11-03. AWS service behavior and worksh
 - Container Security Workshop module 6: [Detective and incident response](https://catalog.workshops.aws/containersecurity/en-US/module6). Useful for correlation and Finding Groups.
 - Workshop environment requirements, EC2/EKS cost, regions, and teardown steps need validation before choosing the lab design. The workshop's dedicated account/cluster may differ from our eventual Terraform lab.
 
+### Run note: reduced runtime exercise
+
+The current [official module 5.3.2](https://catalog.workshops.aws/containersecurity/en-US/module5/module5-3/module5-3-2) manifest includes privileged containers, a host filesystem mount, secret-reading RBAC, Tor traffic, metadata requests, broad subnet scans, log manipulation, and a resource stress loop. We reviewed it but did not apply it to the project cluster. Instead, `examples/safe-eks-runtime-simulation/` runs a scoped pod-list API request and a one-port TCP connect scan against a demo service in an isolated namespace. The exercise completed successfully (HTTP 200, TCP 80 open, scoped API query); no new GuardDuty finding appeared during the observation window. We deleted the simulation namespace and verified the demo workload remained healthy. This does not validate attack-sequence correlation.
+
+A separate synthetic `AttackSequence:EKS/CompromisedCluster` sample was routed through EventBridge and Step Functions. The analyzer recognized its existing finding ID as a duplicate and selected `NOTIFY_ONLY`, since the fixture references a different account and cluster. This confirms duplicate handling and the safety gate, but it is not a fresh finding analysis or evidence of a real attack sequence.
+
 
 ## Bài học thiết kế cho incident workflow
 

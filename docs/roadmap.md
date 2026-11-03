@@ -10,7 +10,8 @@
 ## 1. Detection (đã deploy; workshop còn lại)
 
 - [x] GuardDuty plans và managed agent; coverage hiện healthy (1 EKS + 2 EC2).
-- [x] Sample finding qua workflow; sample tổng hợp ngoài account/cluster lab được `NOTIFY_ONLY`.
+- [x] Sample tổng hợp qua workflow; finding ngoài account/cluster lab được nhận diện duplicate và `NOTIFY_ONLY`.
+- [x] Chạy mô phỏng runtime giới hạn trong namespace riêng; xác nhận API query trong phạm vi và scan một cổng demo.
 - [ ] Chạy Container Security Workshop 5.3.2 để tạo attack sequence thật trong cluster lab và ghi kết quả/cleanup.
 
 ## 2. Evidence analysis (đã deploy; giới hạn rõ)
