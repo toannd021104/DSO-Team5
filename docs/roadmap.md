@@ -1,54 +1,48 @@
 # Roadmap
 
-## Milestone 0 — Repository and design (current)
+## 0. Thiết kế (đã hoàn thành)
 
-- [x] Define detect/analyze/respond loop and initial architecture.
-- [x] Record current GuardDuty terminology, source links, and research gaps.
-- [x] Define safe response principles and candidate playbooks.
-- [x] Decide lab region: `ap-southeast-1`; use profile `guru`.
-- [x] Add the first Terraform stack for EKS, GuardDuty, EventBridge, and observe-only event handling.
-- [ ] Decide budget and first containment action.
+- [x] Chọn AWS region `ap-southeast-1` và profile `guru`.
+- [x] Nghiên cứu GuardDuty, Detective, AWS incident response guidance và các repo playbook mẫu.
+- [x] Vẽ luồng detect → analyze → policy → contain → recover/verify bằng SVG.
+- [x] Dựng Terraform nền tảng EKS + GuardDuty + EventBridge → Lambda observe-only.
+- [ ] Triển khai lên account sandbox. Hiện AWS Organization SCP explicit-deny API cần để lập Terraform plan.
 
-## Milestone 1 — Validate detection manually
+## 1. Detection trên sandbox
 
-- Provision or use an isolated disposable EKS lab.
-- Enable EKS Protection; optionally enable Runtime Monitoring and verify healthy coverage.
-- Follow the current Container Security Workshop module 5.3.2 attack-sequence lab.
-- Capture sanitized GuardDuty EventBridge events and record required prerequisites and cleanup.
+- Bật EKS Protection và Runtime Monitoring; xác nhận GuardDuty agent coverage healthy.
+- Chạy Container Security Workshop module 5.3.2 trong cluster riêng.
+- Lưu event mẫu đã khử thông tin nhạy cảm, kiểm tra finding và các nguồn signal.
+- Ghi lại prerequisites, chi phí thực tế và bước teardown.
 
-**Acceptance:** reproducible finding; event payload retained; coverage status documented; all lab resources can be torn down; measured cost assumptions recorded.
+**Tiêu chí đạt:** attack-sequence finding được tạo và nhận qua EventBridge; coverage được xác nhận; có thể xoá lab sạch.
 
-## Milestone 2 — Terraform detection and observe-only workflow
+## 2. Workflow phân tích (observe-only)
 
-Starter Terraform is in `infra/dev/`. It is not yet applied to AWS.
+- EventBridge → Step Functions; retry có giới hạn, DLQ và alarm.
+- Validate account/region/schema, idempotency, raw event retention và incident record.
+- Enrich từ GuardDuty, EKS metadata, CloudTrail/audit và Detective context.
+- Xuất root-cause hypothesis có evidence, confidence, blast radius và evidence gaps.
+- Replay finding fixtures để kiểm tra các nhánh policy.
 
-- Implement reusable Terraform modules for GuardDuty configuration, event routing, workflow, least-privilege IAM, logging, and notifications.
-- Add event validation, deduplication, incident record, and deterministic classification.
-- Keep all remediation disabled; add a `dry_run`/observe-only default.
+**Tiêu chí đạt:** duplicate không nhân đôi incident; thiếu context hoặc API lỗi chỉ notify; mọi kết luận có provenance.
 
-**Acceptance:** real finding reaches workflow once logically; duplicate deliveries do not duplicate incident/action; malformed or unknown events notify without mutation; failures are visible.
+## 3. Sandbox auto-containment
 
-## Milestone 3 — One scoped automatic containment
+- Enable EKS VPC CNI NetworkPolicy support và xác thực giới hạn theo CNI/OS/IP family.
+- Chỉ auto xử lý exact attack-sequence finding trên cluster/workload allowlist.
+- Dùng role riêng, Kubernetes RBAC hẹp, action ID, TTL, verification, rollback và kill switch.
+- Kiểm thử positive, false-positive, replay, timeout, partial action và recovery.
 
-- Select one reversible action with namespace/workload-level scope.
-- Add explicit environment allow-list, action TTL, audit record, verification, rollback, and emergency disable.
-- Test positive, negative, duplicate, timeout, and partial-failure cases using representative events.
+**Tiêu chí đạt:** containment chỉ tác động đúng workload đã định; policy rollback đúng resource do action tạo; lỗi không gây mutation lặp.
 
-**Acceptance:** only the intended demo workload changes; action can be verified and reversed; missing context never causes a write action.
+## 4. AI-assisted analysis
 
-## Milestone 4 — AI-assisted analysis
+- Thêm read-only summarizer trên evidence bundle đã giảm dữ liệu nhạy cảm.
+- Yêu cầu trích dẫn evidence fields và thể hiện uncertainty.
+- So sánh chất lượng với incident đã được người review; policy engine vẫn là nơi duy nhất cho phép action.
 
-- Add a read-only summarizer over curated incident evidence.
-- Require evidence references and mark uncertainty; compare summaries to a human-reviewed baseline.
-- Keep deterministic policy as sole action authorization point.
+## 5. Hardening
 
-**Acceptance:** AI cannot directly invoke mutation tools; summary quality and latency are measured; sensitive fields are minimized.
-
-## Milestone 5 — Operational hardening
-
-- Add multi-account strategy only if needed, dashboards/SLOs, cost controls, retention policy, runbooks, and incident ownership.
-- Review IAM, encryption, logging access, data handling, and failure modes.
-
-## First implementation task
-
-Before writing Terraform, run the workshop scenario and save a sanitized event fixture (remove account IDs, ARNs, IPs, names, and identifiers as needed). This fixture will guide EventBridge filters, normalization, and policy tests.
+- Retention, KMS, CloudWatch metrics/alarms, ownership, runbooks, budget controls và game-day.
+- Mở rộng multi-account hoặc production chỉ sau khi sandbox playbook đạt tiêu chí và quyền đã được rà soát.

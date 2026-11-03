@@ -18,7 +18,7 @@ Repo học tập của DSO-Team5: dựng lab EKS, nhận diện finding GuardDut
 
 ## Trạng thái hiện tại
 
-**Đã có:** Terraform tạo VPC, EKS, GuardDuty EKS Protection/Runtime Monitoring và luồng finding `AttackSequence:EKS/CompromisedCluster` qua EventBridge đến Lambda.
+**Đã có trong repo:** Terraform cho VPC, EKS, GuardDuty EKS Protection/Runtime Monitoring và luồng finding `AttackSequence:EKS/CompromisedCluster` qua EventBridge đến Lambda. Hạ tầng AWS chưa được triển khai.
 
 **Lambda hiện chỉ ghi nhận finding (observe-only).** Nó chưa phân tích nguyên nhân đầy đủ và chưa thay đổi workload. Tự động cô lập workload và AI hỗ trợ phân tích nằm trong các giai đoạn tiếp theo.
 
@@ -46,31 +46,13 @@ EKS control plane, EC2 worker nodes, NAT Gateway, GuardDuty, CloudWatch Logs và
 
 ## Kiến trúc
 
-### Luồng đã được Terraform dựng
+Sơ đồ mô tả luồng mục tiêu và các nhánh theo mức rủi ro. Mã Terraform hiện chỉ cài nhánh đầu tiên ở chế độ observe-only; các khối còn lại là kế hoạch triển khai.
 
-```mermaid
-flowchart LR
-  GD[GuardDuty] --> EB[EventBridge<br/>lọc EKS Attack Sequence]
-  EB --> L[Lambda<br/>observe-only]
-  L --> CW[CloudWatch Logs]
-```
+![Luồng EKS incident response của Guarduty](docs/incident-response-flow.svg)
 
-### Hướng phát triển
+Đọc phần [mô tả từng bước](docs/incident-response-flow.md) để xem rule quyết định, root-cause analysis, giới hạn NetworkPolicy, rollback và nguồn tham khảo.
 
-```mermaid
-flowchart LR
-  F[GuardDuty finding] --> V[Validate và deduplicate]
-  V --> E[Enrich evidence và workload context]
-  E --> P[Deterministic policy]
-  P -->|chưa rõ / chỉ quan sát| N[Notify]
-  P -->|đúng điều kiện| R[Scoped response playbook]
-  R --> Q[Quarantine có thời hạn]
-  Q --> C[Verify và rollback]
-  E -. giai đoạn sau .-> AI[AI tóm tắt, nêu evidence]
-  AI -. chỉ đề xuất .-> P
-```
-
-AI không được tự cấp quyền hoặc gọi lệnh thay đổi cluster. Policy xác định hành động; nếu thiếu ngữ cảnh, hệ thống phải chuyển sang cảnh báo thay vì tự sửa.
+AI chỉ tóm tắt evidence và đề xuất. Policy xác thực mới cấp quyền; nếu thiếu context, workflow chuyển sang notify-only.
 
 ## Lộ trình
 
@@ -98,6 +80,7 @@ examples/        EventBridge event pattern mẫu
 ## Tài liệu
 
 - [Hướng dẫn Terraform lab](infra/dev/README.md)
+- [Luồng incident response có sơ đồ SVG](docs/incident-response-flow.md)
 - [Kiến trúc và trust boundaries](docs/architecture.md)
 - [Nghiên cứu GuardDuty và cơ hội cải tiến](docs/research.md)
 - [Response playbooks](docs/response-playbooks.md)

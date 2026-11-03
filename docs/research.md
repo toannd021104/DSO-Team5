@@ -18,6 +18,22 @@ Checked against AWS documentation on 2026-11-03. AWS service behavior and worksh
 - Container Security Workshop module 6: [Detective and incident response](https://catalog.workshops.aws/containersecurity/en-US/module6). Useful for correlation and Finding Groups.
 - Workshop environment requirements, EC2/EKS cost, regions, and teardown steps need validation before choosing the lab design. The workshop's dedicated account/cluster may differ from our eventual Terraform lab.
 
+
+## Bài học thiết kế cho incident workflow
+
+- AWS chia incident operations thành detect, analyze, contain, eradicate, recover; các pha có thể quay lại nhau khi verification đưa ra evidence mới. Vì vậy workflow cần có nhánh failure/re-analysis, không chỉ một Lambda chạy tuyến tính.
+- Attack-sequence finding tổng hợp nhiều signal và có mức Critical, nhưng vẫn là cảnh báo về potential compromise. Phải xem `Actors`, `Resources`, `Signals`, timeline và context account trước khi tác động workload.
+- Detective finding groups nhóm evidence theo thời gian, entity và TTP. Dùng để tìm scope/root-cause; không block containment chỉ để chờ nhóm dữ liệu được tạo.
+- Response nên staged và reversible. Với EKS, NetworkPolicy quarantine chỉ an toàn khi VPC CNI feature được bật, pod selector rõ, blast radius đoán được và policy đã test đúng traffic paths.
+- Reusable AWS project patterns khuyên tách event routing, workflow orchestration, playbook và target action. GuardDuty Automated Response Sample dùng EventBridge/Step Functions/Lambda nhưng tập trung EC2; Incident Response Playbooks có kịch bản Container/EKS riêng. Dùng chúng làm pattern, không sao chép nguyên action EC2 vào EKS.
+- AI có thể hỗ trợ tóm tắt triage và nêu evidence gaps. Quyền hành động phải ở deterministic policy/action adapter, được test và version-control.
+
+## Dự án tham khảo
+
+- [aws-samples/amazon-guardduty-automated-response-sample](https://github.com/aws-samples/amazon-guardduty-automated-response-sample) — orchestration pattern EventBridge + Step Functions + Lambda; sample tập trung remediation EC2.
+- [aws-samples/aws-incident-response-playbooks](https://github.com/aws-samples/aws-incident-response-playbooks) — triage guide, template playbook, Container/EKS compromise và automation patterns.
+- [Container Security Workshop 5.3.2](https://catalog.workshops.aws/containersecurity/en-US/module5/module5-3/module5-3-2) — tạo attack-sequence finding để diễn tập detect/respond.
+
 ## Improvement opportunities
 
 1. **Close the feedback loop** — define objective acceptance measures: finding received, context completeness, correct policy branch, containment verified, rollback successful, and elapsed time for each stage.
@@ -30,14 +46,14 @@ Checked against AWS documentation on 2026-11-03. AWS service behavior and worksh
 8. **Plan rollback and blast-radius limits** — define quarantine expiry, recovery ownership, exception handling, and an emergency disable switch before enabling writes.
 9. **Manage cost and cleanup** — isolate demo workloads; set budget alerts and explicit teardown. EKS control plane, compute, NAT, GuardDuty plans, logs, and data retention can all affect cost.
 
-## Open questions before Terraform
+## Open decisions before enabling response
 
-- Which AWS region and account are available, and can the team create EKS/GuardDuty/IAM/EventBridge/Step Functions resources there?
-- Use workshop-provided cluster or create a minimal disposable cluster? Which CNI/network policy implementation will be used?
-- What is the first automatic response: namespace-scoped quarantine, block egress, or another reversible action?
-- Which workload types are safe to affect, who owns them, and how long can quarantine last?
-- What incident record retention and notification target are acceptable?
-- Is AI in the first demo limited to read-only summarization, or deferred until the deterministic pipeline is measured?
+- AWS region đã chọn là `ap-southeast-1`; Terraform planning hiện bị AWS Organizations SCP explicit-deny `ec2:DescribeAvailabilityZones`. GuardDuty read access cũng bị deny. Cần quyền từ Organizations admin trước khi plan/apply.
+- Xác định quyền quản trị GuardDuty detector thuộc stack lab hay được team quản lý tập trung; không tạo detector trùng hoặc chiếm state ngoài ý muốn.
+- Bật và xác minh network-policy feature trong Amazon VPC CNI; kiểm thử egress, DNS, AWS API và traffic paths trước khi chọn selector cho quarantine.
+- Chốt TTL quarantine, owner, recovery criteria và đường khẩn cấp để tắt auto-response.
+- Chốt incident store retention, encryption/KMS ownership và notification target.
+- Chọn AI model/provider sau khi có finding fixtures và baseline; AI chỉ read-only.
 
 ## Primary sources
 
@@ -48,3 +64,8 @@ Checked against AWS documentation on 2026-11-03. AWS service behavior and worksh
 - [Runtime Monitoring finding types](https://docs.aws.amazon.com/guardduty/latest/ug/findings-runtime-monitoring.html)
 - [GuardDuty attack sequence finding types](https://docs.aws.amazon.com/guardduty/latest/ug/guardduty-attack-sequence-finding-types.html)
 - [EKS GuardDuty integration](https://docs.aws.amazon.com/eks/latest/userguide/integration-guardduty.html)
+- [Amazon Detective finding groups](https://docs.aws.amazon.com/detective/latest/userguide/groups-about.html)
+- [Amazon Detective with EKS](https://docs.aws.amazon.com/eks/latest/userguide/integration-detective.html)
+- [AWS incident response containment guidance](https://docs.aws.amazon.com/security-ir/latest/userguide/contain.html)
+- [AWS Well-Architected automated response](https://docs.aws.amazon.com/wellarchitected/2023-10-03/framework/sec_detect_investigate_events_auto_response.html)
+- [EKS VPC CNI network policies](https://docs.aws.amazon.com/eks/latest/userguide/cni-network-policy.html)

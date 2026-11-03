@@ -1,0 +1,154 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1920 1400" role="img" aria-labelledby="title desc">
+  <title id="title">Guarduty EKS incident response flow</title>
+  <desc id="desc">GuardDuty detection flows through EventBridge and Step Functions for enrichment and root cause analysis, then deterministic policy selects automated containment, approval, or notify-only. Actions are verified, rolled back when needed, and recorded.</desc>
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#f7faff"/><stop offset="1" stop-color="#eef3fb"/></linearGradient>
+    <linearGradient id="hero" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#172b4d"/><stop offset="1" stop-color="#254d75"/></linearGradient>
+    <filter id="shadow" x="-10%" y="-10%" width="120%" height="130%"><feDropShadow dx="0" dy="7" stdDeviation="9" flood-color="#142b4a" flood-opacity=".10"/></filter>
+    <marker id="arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="9" markerHeight="9" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" fill="#66809e"/></marker>
+    <marker id="arrow-green" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="9" markerHeight="9" orient="auto"><path d="M 0 0 L 10 5 L 0 10 z" fill="#16865b"/></marker>
+    <style>
+      text{font-family:Inter,ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif;fill:#172b4d}
+      .eyebrow{font-size:15px;font-weight:800;letter-spacing:2.4px;fill:#b9d5f4}
+      .title{font-size:36px;font-weight:800;fill:#fff}
+      .subtitle{font-size:17px;fill:#dbe8f5}
+      .lane{font-size:14px;font-weight:800;letter-spacing:1.7px;fill:#56708e}
+      .card{fill:#fff;stroke:#d9e3ef;stroke-width:1.5;rx:18;filter:url(#shadow)}
+      .card-title{font-size:21px;font-weight:750}
+      .body{font-size:16px;fill:#405570}
+      .small{font-size:14px;fill:#58708b}
+      .pill{font-size:12px;font-weight:800;letter-spacing:.7px}
+      .number{font-size:14px;font-weight:850;fill:#fff}
+      .arrow{fill:none;stroke:#7890aa;stroke-width:3;marker-end:url(#arrow)}
+      .arrow-green{fill:none;stroke:#16865b;stroke-width:3.5;marker-end:url(#arrow-green)}
+      .dash{stroke-dasharray:8 8}
+    </style>
+  </defs>
+
+  <rect width="1920" height="1400" fill="url(#bg)"/>
+  <rect x="0" y="0" width="1920" height="122" fill="url(#hero)"/>
+  <text x="58" y="39" class="eyebrow">GUARDUTY · EKS SECURITY OPERATIONS</text>
+  <text x="58" y="82" class="title">Từ finding đến containment có kiểm chứng</text>
+  <text x="1435" y="54" class="subtitle">Luồng mục tiêu · Sandbox auto-response</text>
+  <text x="1435" y="82" class="subtitle">AI phân tích, policy giữ quyền quyết định</text>
+
+  <text x="60" y="158" class="lane">01 — DETECT &amp; INGEST</text>
+  <text x="890" y="158" class="lane">02 — INVESTIGATE &amp; DECIDE</text>
+
+  <!-- Detection -->
+  <rect x="60" y="184" width="355" height="300" class="card"/>
+  <circle cx="91" cy="218" r="18" fill="#2368a8"/><text x="91" y="223" text-anchor="middle" class="number">1</text>
+  <text x="120" y="225" class="card-title">GuardDuty detect</text>
+  <rect x="84" y="250" width="305" height="38" rx="19" fill="#e7f1fc"/>
+  <text x="102" y="274" class="pill" fill="#2368a8">EKS PROTECTION</text>
+  <text x="84" y="321" class="body">Audit log · control-plane activity</text>
+  <rect x="84" y="340" width="305" height="38" rx="19" fill="#e8f5ef"/>
+  <text x="102" y="364" class="pill" fill="#16865b">RUNTIME MONITORING</text>
+  <text x="84" y="411" class="body">Process · file · network behavior</text>
+  <text x="84" y="440" class="small">Attack sequence · Critical</text>
+  <text x="84" y="462" class="small">Coverage theo dõi riêng</text>
+
+  <!-- Event intake -->
+  <rect x="455" y="184" width="385" height="300" class="card"/>
+  <circle cx="486" cy="218" r="18" fill="#2368a8"/><text x="486" y="223" text-anchor="middle" class="number">2</text>
+  <text x="515" y="225" class="card-title">EventBridge → workflow</text>
+  <text x="482" y="270" class="body">• Lọc đúng finding / account / region</text>
+  <text x="482" y="302" class="body">• Step Functions điều phối từng bước</text>
+  <text x="482" y="334" class="body">• Validate schema, định danh incident</text>
+  <text x="482" y="366" class="body">• Dedup + idempotency trước khi sửa</text>
+  <text x="482" y="398" class="body">• Retry giới hạn + DLQ khi lỗi</text>
+  <text x="482" y="445" class="small">Event gốc và action log được giữ lại</text>
+
+  <!-- Analysis -->
+  <rect x="880" y="184" width="500" height="300" class="card"/>
+  <circle cx="911" cy="218" r="18" fill="#7255b5"/><text x="911" y="223" text-anchor="middle" class="number">3</text>
+  <text x="940" y="225" class="card-title">Điều tra &amp; dựng timeline</text>
+  <text x="908" y="270" class="body">• GuardDuty signals, actors, resources, MITRE</text>
+  <text x="908" y="302" class="body">• Detective finding groups / entity graph</text>
+  <text x="908" y="334" class="body">• EKS audit + runtime + CloudTrail context</text>
+  <text x="908" y="366" class="body">• Cluster → namespace → workload → pod</text>
+  <rect x="908" y="392" width="444" height="66" rx="12" fill="#f1edfb"/>
+  <text x="927" y="419" class="small" font-weight="750">Kết quả: giả thuyết root cause + confidence</text>
+  <text x="927" y="443" class="small">kèm evidence, blast radius và phần chưa rõ</text>
+
+  <!-- Policy -->
+  <rect x="1420" y="184" width="440" height="300" class="card"/>
+  <circle cx="1451" cy="218" r="18" fill="#7255b5"/><text x="1451" y="223" text-anchor="middle" class="number">4</text>
+  <text x="1480" y="225" class="card-title">Policy gate quyết định</text>
+  <text x="1448" y="270" class="body">Finding type + severity + confidence</text>
+  <text x="1448" y="302" class="body">Môi trường + target allowlist</text>
+  <text x="1448" y="334" class="body">Coverage + action health + scope</text>
+  <rect x="1448" y="365" width="384" height="74" rx="12" fill="#fff4df"/>
+  <text x="1466" y="394" class="small" font-weight="750">AI chỉ tóm tắt / đề xuất</text>
+  <text x="1466" y="419" class="small">Policy xác thực mới được phép hành động</text>
+
+  <!-- Main arrows -->
+  <path d="M415 334 H448" class="arrow"/>
+  <path d="M840 334 H873" class="arrow"/>
+  <path d="M1380 334 H1413" class="arrow"/>
+
+  <text x="60" y="520" class="lane">03 — RESPONSE THEO MỨC RỦI RO</text>
+
+  <!-- Notify only -->
+  <rect x="60" y="578" width="500" height="180" rx="18" fill="#f0f3f7" stroke="#ccd6e2" stroke-width="1.5" filter="url(#shadow)"/>
+  <rect x="60" y="578" width="9" height="180" rx="4" fill="#8292a6"/>
+  <text x="91" y="619" class="card-title">Notify-only</text>
+  <text x="91" y="654" class="body">Target mơ hồ · evidence thiếu · policy lỗi</text>
+  <text x="91" y="686" class="body">Coverage unhealthy · event không hợp lệ</text>
+  <text x="91" y="724" class="small">Không suy đoán resource để chạy lệnh sửa</text>
+
+  <!-- Approval -->
+  <rect x="610" y="578" width="500" height="180" rx="18" fill="#fff6e8" stroke="#f0d39a" stroke-width="1.5" filter="url(#shadow)"/>
+  <rect x="610" y="578" width="9" height="180" rx="4" fill="#d88a12"/>
+  <text x="641" y="619" class="card-title">Escalate / approval gate</text>
+  <text x="641" y="654" class="body">Production · blast radius lớn · action khó đảo</text>
+  <text x="641" y="686" class="body">Gửi case kèm evidence và đề xuất playbook</text>
+  <text x="641" y="724" class="small">Sandbox mới auto khi đúng policy đã kiểm thử</text>
+
+  <!-- Automatic containment -->
+  <rect x="1160" y="578" width="700" height="180" rx="18" fill="#eaf7f0" stroke="#a6dec0" stroke-width="1.5" filter="url(#shadow)"/>
+  <rect x="1160" y="578" width="9" height="180" rx="4" fill="#16865b"/>
+  <text x="1191" y="619" class="card-title">Auto-response có scope — sandbox</text>
+  <text x="1191" y="654" class="body">Exact Critical sequence + cluster / workload xác định</text>
+  <text x="1191" y="686" class="body">Playbook allowlist · dedicated IAM/RBAC · action ID</text>
+  <text x="1191" y="724" class="small">Reversible · TTL · kill switch · audit log</text>
+
+  <!-- Branches from policy -->
+  <path d="M1640 484 V550 H310 V570" class="arrow dash"/>
+  <path d="M1640 484 V550 H860 V570" class="arrow dash"/>
+  <path d="M1640 484 V570" class="arrow-green"/>
+
+  <!-- Automated response path -->
+  <path d="M1510 758 V790" class="arrow-green"/>
+  <rect x="1160" y="800" width="700" height="165" rx="18" fill="#fff" stroke="#b8dcc9" stroke-width="1.5" filter="url(#shadow)"/>
+  <circle cx="1195" cy="838" r="18" fill="#16865b"/><text x="1195" y="843" text-anchor="middle" class="number">5</text>
+  <text x="1225" y="845" class="card-title">Contain — cô lập hẹp, giữ evidence</text>
+  <text x="1191" y="884" class="body">NetworkPolicy / adapter đã xác minh CNI hỗ trợ</text>
+  <text x="1191" y="916" class="body">Không xoá tràn lan pod hay node</text>
+  <text x="1191" y="946" class="small">NetworkPolicy cần bật và test trước khi playbook dùng</text>
+
+  <path d="M1510 965 V992" class="arrow-green"/>
+  <rect x="1160" y="1002" width="700" height="170" rx="18" fill="#fff" stroke="#b8dcc9" stroke-width="1.5" filter="url(#shadow)"/>
+  <circle cx="1195" cy="1040" r="18" fill="#16865b"/><text x="1195" y="1045" text-anchor="middle" class="number">6</text>
+  <text x="1225" y="1047" class="card-title">Eradicate → recover → verify</text>
+  <text x="1191" y="1086" class="body">Rebuild sạch · sửa nguyên nhân · rotate credential</text>
+  <text x="1191" y="1118" class="body">Xác nhận traffic / workload khỏe, không tái phát</text>
+  <text x="1191" y="1150" class="small">Thất bại: báo động, rollback theo policy, không retry vô hạn</text>
+
+  <!-- Cross-cutting audit strip -->
+  <rect x="60" y="830" width="1010" height="342" rx="18" fill="#edf2fa" stroke="#d4deea" stroke-width="1.5"/>
+  <text x="92" y="875" class="card-title">Audit, observability &amp; learning</text>
+  <text x="92" y="919" class="body">Incident record: event gốc · evidence source · policy version · action/rollback result</text>
+  <text x="92" y="957" class="body">Reliability: idempotency · retry bounded · DLQ · alarm khi coverage/workflow lỗi</text>
+  <text x="92" y="995" class="body">Metrics: MTTD · phân tích/containment time · false positive · action failure</text>
+  <text x="92" y="1033" class="body">Game-day/replay: evidence citation · confidence · gaps · tune playbook</text>
+  <rect x="92" y="1070" width="940" height="62" rx="12" fill="#fff"/>
+  <text x="112" y="1096" class="small" font-weight="750">Đường hiện có trong Terraform:</text>
+  <text x="112" y="1118" class="small">GuardDuty → EventBridge → Lambda observe-only. Workflow và containment là mục tiêu tiếp theo.</text>
+
+  <path d="M1160 1090 H1120 V990 H1080" class="arrow dash"/>
+  <text x="1087" y="978" class="small">action log</text>
+
+  <text x="60" y="1335" class="small">Guarduty · Luồng mục tiêu · Mọi mutation đi qua policy allowlist và response adapter quyền tối thiểu</text>
+  <text x="1370" y="1335" class="small">AWS IR lifecycle: Detect → Recover</text>
+</svg>
