@@ -66,11 +66,12 @@ Containment options must be evaluated per cluster networking and workload owners
 - `docs/response-playbooks.md` — proposed actions, gates, verification, and rollback.
 - `docs/adr/0001-deterministic-response-first.md` — why the MVP does not let an LLM execute actions.
 - `examples/eventbridge-attack-sequence-pattern.json` — starter event filter; validate it against real account events before use.
+- `infra/dev/` — Terraform lab stack for VPC, EKS, GuardDuty, EventBridge, and an observe-only incident Lambda.
 
 ## Planned implementation
 
 1. Validate the workshop scenario and real event payload in an isolated AWS account.
-2. Add Terraform for the lab foundation, GuardDuty configuration, EventBridge, workflow, IAM, logging, and optional EKS resources.
+2. Review and plan the Terraform lab foundation in `infra/dev/`; it creates VPC, EKS, GuardDuty configuration, EventBridge, IAM, logging, and an observe-only Lambda.
 3. Add a deterministic incident handler with a dry-run mode, deduplication, and audit trail.
 4. Add one reversible containment playbook and its verification/rollback path.
 5. Evaluate AI-assisted summaries and recommendations against recorded incidents; keep action authorization outside the model.

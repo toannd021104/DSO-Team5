@@ -5,7 +5,9 @@
 - [x] Define detect/analyze/respond loop and initial architecture.
 - [x] Record current GuardDuty terminology, source links, and research gaps.
 - [x] Define safe response principles and candidate playbooks.
-- [ ] Decide lab region/account, cluster approach, budget, and first containment action.
+- [x] Decide lab region: `ap-southeast-1`; use profile `guru`.
+- [x] Add the first Terraform stack for EKS, GuardDuty, EventBridge, and observe-only event handling.
+- [ ] Decide budget and first containment action.
 
 ## Milestone 1 — Validate detection manually
 
@@ -17,6 +19,8 @@
 **Acceptance:** reproducible finding; event payload retained; coverage status documented; all lab resources can be torn down; measured cost assumptions recorded.
 
 ## Milestone 2 — Terraform detection and observe-only workflow
+
+Starter Terraform is in `infra/dev/`. It is not yet applied to AWS.
 
 - Implement reusable Terraform modules for GuardDuty configuration, event routing, workflow, least-privilege IAM, logging, and notifications.
 - Add event validation, deduplication, incident record, and deterministic classification.
