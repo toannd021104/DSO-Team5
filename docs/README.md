@@ -5,8 +5,11 @@ Mục lục tài liệu thiết kế và vận hành Guarduty.
 | Tài liệu | Nội dung |
 |---|---|
 | [`architecture.md`](architecture.md) | Thành phần, luồng dữ liệu, ranh giới tin cậy và xử lý lỗi |
+| [`project-guide.md`](project-guide.md) | Giải thích dự án và thuật ngữ bằng ngôn ngữ dễ hiểu |
 | [`incident-response-flow.md`](incident-response-flow.md) | Các bước detect, analyze, policy và response |
 | [`incident-response-flow.svg`](incident-response-flow.svg) | Sơ đồ trực quan luồng xử lý |
+| [`presentation-script.md`](presentation-script.md) | Lời dẫn và câu hỏi thường gặp cho slide |
+| [`demo-runbook.md`](demo-runbook.md) | Các bước chạy demo detection và cleanup trên sandbox |
 | [`response-playbooks.md`](response-playbooks.md) | Sandbox response đang có và action rủi ro cao dự kiến |
 | [`research.md`](research.md) | AWS docs, workshop, dự án tham khảo và cơ hội cải tiến |
 | [`roadmap.md`](roadmap.md) | Tính năng đã triển khai, giới hạn và các mốc tiếp theo |

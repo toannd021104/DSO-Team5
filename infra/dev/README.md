@@ -28,7 +28,15 @@ File `terraform.tfvars.example` dùng profile `guru`, region `us-east-1` và CID
 
 ## State và an toàn account
 
-Terraform state của deployment hiện tại được lưu local và không có trong Git. Stack live đã tồn tại trong AWS account của dự án. Clone repo mới không có state đó. Không chạy `apply` từ clone mới vào account hiện hữu: Terraform có thể tạo trùng tài nguyên hoặc xung đột với cấu hình GuardDuty cấp account.
+Terraform state được lưu local, không có trong Git. Mỗi account sandbox dùng workspace riêng theo account ID. Trước mỗi plan/apply, kiểm tra `aws sts get-caller-identity`, region và workspace. Không chạy `apply` từ workspace rỗng vào account đã có stack: Terraform có thể tạo trùng tài nguyên hoặc xung đột với GuardDuty cấp account.
+
+Ví dụ với profile `guru`:
+
+```bash
+account_id=$(aws sts get-caller-identity --profile guru --query Account --output text)
+workspace_name="sandbox-${account_id}"
+terraform workspace select "$workspace_name" || terraform workspace new "$workspace_name"
+```
 
 Trước khi nhiều người cùng vận hành, hãy thiết lập remote backend an toàn có locking và migrate state theo quy trình đã review. Hiện tại một operator nên quản lý local state hiện hữu và giữ bản sao lưu được bảo vệ bên ngoài repo.
 

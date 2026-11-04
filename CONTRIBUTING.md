@@ -5,9 +5,12 @@ Cảm ơn bạn đã giúp cải thiện Guarduty. Giữ thay đổi tập trung
 ## Quy ước repository
 
 - README gốc giúp người mới nắm dự án; để hướng dẫn deploy trong `infra/dev/README.md`.
+- Giải thích cho người mới và nội dung thuyết trình thuộc `docs/` và `presentation/`; chỉnh mã nguồn `presentation/build_deck.py` rồi build lại PPTX.
+- Slide phải phân biệt rõ finding thật, sample/synthetic fixture và nội dung roadmap. Không gọi analyzer rule-based là AI analyst.
 - Giữ stack deploy hiện tại trong `infra/dev`. Chỉ tách Terraform module dùng lại khi có consumer thứ hai thực tế.
 - Tách bạch trách nhiệm AWS operation, remediation policy và analysis. Output AI/model không được cấp quyền Kubernetes mutation.
 - Cập nhật `docs/architecture.md`, `docs/response-playbooks.md` và `docs/roadmap.md` khi luồng hoặc trạng thái thay đổi.
+- Khi đổi incident flow, cập nhật đồng bộ sơ đồ SVG, project guide và slide source/deck.
 - Dùng event fixture tổng hợp đã loại dữ liệu nhạy cảm. Không commit finding hoặc incident evidence thật.
 
 ## Thay đổi Terraform
@@ -32,6 +35,8 @@ Không commit:
 - Lambda ZIP sinh tự động, Python bytecode hoặc cache directory.
 
 Commit `.terraform.lock.hcl` để giữ lựa chọn provider nhất quán.
+
+PPTX là artifact có thể sinh lại và được commit để tiện thuyết trình; `build_deck.py` là nguồn nội dung chuẩn. Không đưa AWS credentials, account evidence hoặc tài nguyên cloud thật vào slide.
 
 ## Pull request
 

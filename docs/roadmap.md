@@ -9,12 +9,13 @@
 
 ## 1. Detection (đã deploy; workshop còn lại)
 
-- [x] GuardDuty plans và managed agent; coverage hiện healthy (1 EKS + 2 EC2).
+- [x] GuardDuty plans và managed agent; coverage `HEALTHY` cho 1 EKS cluster và 2 worker node.
 - [x] Sample tổng hợp qua workflow; finding ngoài account/cluster lab được nhận diện duplicate và `NOTIFY_ONLY`.
-- [x] Tạo DNS canary GuardDuty thật; EKS Runtime Monitoring EventBridge pattern match; analyzer replay lưu process/domain/cluster/workload và chọn `NOTIFY_ONLY`.
-- [x] Nhánh `NOTIFY_ONLY` publish structured analysis vào SNS; Step Functions nhận MessageId thành công.
-- [ ] Quan sát EventBridge tự khởi chạy Step Functions từ một EKS Runtime Monitoring event mới sau khi runtime rule được deploy.
-- [x] Chạy mô phỏng runtime giới hạn trong namespace riêng; xác nhận API query trong phạm vi và scan một cổng demo.
+- [x] Tạo DNS canary mới; GuardDuty sinh `Backdoor:Runtime/C&CActivity.B!DNS` (severity 8), có process `nslookup`, pod/container và cluster.
+- [x] Quan sát EventBridge tự khởi chạy Step Functions từ finding runtime EKS; execution `SUCCEEDED`.
+- [x] Analyzer ghi finding/evidence vào S3, incident state vào DynamoDB; chọn `NOTIFY_ONLY`; SNS publish trả MessageId (topic chưa có subscriber).
+- [x] Chạy lại mô phỏng runtime giới hạn từ namespace sạch; HTTP 200, TCP/80 và scoped API query thành công; namespace đã xoá.
+- [x] Mô phỏng giới hạn không tạo GuardDuty finding; không dùng kết quả này để tuyên bố đã phát hiện attack sequence.
 - [ ] Chạy Container Security Workshop 5.3.2 để tạo attack sequence thật trong cluster lab và ghi kết quả/cleanup.
 
 ## 2. Evidence analysis (đã deploy; giới hạn rõ)
